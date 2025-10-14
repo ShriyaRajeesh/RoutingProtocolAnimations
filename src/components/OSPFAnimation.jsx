@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import * as d3 from "d3";
+import Papa from "papaparse";
 
 export default function OSPFAnimation() {
   const [nodes, setNodes] = useState([]);
@@ -11,7 +12,7 @@ export default function OSPFAnimation() {
   const [routingTable, setRoutingTable] = useState([]);
   const svgRef = useRef();
 
-  //  Visualization 
+  // Visualization
   useEffect(() => {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -34,7 +35,6 @@ export default function OSPFAnimation() {
       .attr("stroke", "#999")
       .attr("stroke-width", 2);
 
-
     const linkLabels = svg
       .selectAll(".link-label")
       .data(links)
@@ -44,7 +44,6 @@ export default function OSPFAnimation() {
       .attr("font-size", "12px")
       .attr("fill", "#000")
       .text((d) => d.cost);
-
 
     const node = svg
       .selectAll("circle")
@@ -62,7 +61,6 @@ export default function OSPFAnimation() {
           .on("drag", dragged)
           .on("end", dragEnded)
       );
-
 
     const labels = svg
       .selectAll(".label")
@@ -109,59 +107,82 @@ export default function OSPFAnimation() {
     return () => simulation.stop();
   }, [nodes, links, localRouter]);
 
-  
-const handleAddLink = () => {
-  // Check if cost is valid
-  if (cost < 0) {
-    alert("Please enter a valid cost. It cannot be less than zero.");
-    return;
-  }
+  // Add link manually
+  const handleAddLink = () => {
+    if (cost < 0) {
+      alert("Please enter a valid cost. It cannot be less than zero.");
+      return;
+    }
+    if (!source || !target || !cost) {
+      alert("Please fill in all fields.");
+      return;
+    }
+    if (!nodes.find((n) => n.id === source))
+      setNodes((prev) => [...prev, { id: source }]);
+    if (!nodes.find((n) => n.id === target))
+      setNodes((prev) => [...prev, { id: target }]);
 
-  // Check for missing fields
-  if (!source || !target || !cost) {
-    alert("Please fill in all fields.");
-    return;
-  }
+    const existing = links.find(
+      (l) =>
+        (l.source.id === source && l.target.id === target) ||
+        (l.source.id === target && l.target.id === source)
+    );
+    if (existing) {
+      const confirmUpdate = window.confirm(
+        `A link between ${source} and ${target} already exists. Update cost?`
+      );
+      if (!confirmUpdate) return;
+      setLinks((prev) =>
+        prev.map((l) =>
+          (l.source.id === source && l.target.id === target) ||
+          (l.source.id === target && l.target.id === source)
+            ? { ...l, cost: parseInt(cost, 10) }
+            : l
+        )
+      );
+    } else {
+      setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
+    }
+    setSource("");
+    setTarget("");
+    setCost("");
+  };
 
-  // Add new nodes if they don't exist
-  if (!nodes.find((n) => n.id === source))
-    setNodes((prev) => [...prev, { id: source }]);
-  if (!nodes.find((n) => n.id === target))
-    setNodes((prev) => [...prev, { id: target }]);
+  // CSV Upload
+  const handleCSVUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const data = results.data;
+        const newNodes = new Set(nodes.map((n) => n.id));
+        const newLinks = [...links];
+        data.forEach((row) => {
+          const { source, target, cost } = row;
+          if (!newNodes.has(source)) newNodes.add(source);
+          if (!newNodes.has(target)) newNodes.add(target);
+          newLinks.push({ source, target, cost: parseInt(cost, 10) });
+        });
+        setNodes([...Array.from(newNodes)].map((id) => ({ id })));
+        setLinks(newLinks);
+      },
+    });
+  };
 
-  // Update or Add link
-const existing = links.find(
-  (l) =>
-    (l.source.id === source && l.target.id === target) ||
-    (l.source.id === target && l.target.id === source)
-);
+  // CSV Download of routing table
+  const downloadCSV = () => {
+    if (!routingTable.length) return;
+    const csv = Papa.unparse(routingTable);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "routing_table.csv";
+    link.click();
+  };
 
-if (existing) {
-  const confirmUpdate = window.confirm(
-    `A link between ${source} and ${target} already exists. Do you want to update its cost?`
-  );
-  if (!confirmUpdate) return;
-
-  setLinks((prev) =>
-    prev.map((l) =>
-      (l.source.id === source && l.target.id === target) ||
-      (l.source.id === target && l.target.id === source)
-        ? { ...l, cost: parseInt(cost, 10) }
-        : l
-    )
-  );
-  alert(`Cost between ${source} and ${target} updated to ${cost}.`);
-} else {
-  setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
-}
-
-  // Reset input fields
-  setSource("");
-  setTarget("");
-  setCost("");
-};
-
-
+  // OSPF Routing Algorithm
   const runOSPF = async () => {
     const svg = d3.select(svgRef.current);
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -172,7 +193,6 @@ if (existing) {
       return;
     }
 
-    
     async function flood(currentId) {
       if (visited.has(currentId)) return;
       visited.add(currentId);
@@ -278,8 +298,6 @@ if (existing) {
     const tableData = [];
     nodes.forEach((n) => {
       if (n.id === localRouter) return;
-
-      
       let hop = n.id;
       let parent = prev[hop];
       while (parent && parent !== localRouter) {
@@ -298,15 +316,15 @@ if (existing) {
 
   return (
     <div style={{ maxWidth: "900px", margin: "auto" }}>
-      <h2>OSPF Link-State Routing </h2>
+      <h2>OSPF Link-State Routing</h2>
 
       <div style={{ marginBottom: 10 }}>
-        <label>Source Router ID:</label>
+        <label>Local Router ID:</label>
         <input
           type="text"
           value={localRouter}
           onChange={(e) => setLocalRouter(e.target.value.trim())}
-          placeholder="Enter Source router ID"
+          placeholder="Enter Local router ID"
           style={{ marginLeft: 10 }}
         />
       </div>
@@ -333,6 +351,10 @@ if (existing) {
         <button onClick={handleAddLink}>Add Link</button>
       </div>
 
+      <div style={{ marginBottom: 10 }}>
+        <input type="file" accept=".csv" onChange={handleCSVUpload} />
+      </div>
+
       <svg
         ref={svgRef}
         width={700}
@@ -343,6 +365,9 @@ if (existing) {
       <div style={{ marginTop: 20 }}>
         <button onClick={runOSPF} style={{ padding: "10px 15px" }}>
           Run OSPF
+        </button>
+        <button onClick={downloadCSV} style={{ padding: "10px 15px", marginLeft: 10 }}>
+          Download Routing Table CSV
         </button>
       </div>
 

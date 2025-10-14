@@ -4,13 +4,20 @@ import OSPFAnimation from "./components/OSPFAnimation";
 import DistanceVectorAnimation from "./components/DistanceVectorAnimation";
 import EIGRPAnimation from "./components/EIGRPAnimation";
 
+
 function App() {
   return (
     <Router>
       <div style={{ textAlign: "center", padding: "20px" }}>
-        <h1>Routing Protocol Visualization</h1>
+        <h1>
+          SOFTWARE ENGINEERING (IT303) COURSE PROJECT TITLE: “IMPLEMENTATION OF
+          ANIMATION OF ROUTING PROTOCOLS”{" "}
+        </h1>
+        <h3>carried out by</h3>
+        <h2>Ashab muhammed-231IT011</h2>
+        <h2>Shriya Rajeesh-231IT069</h2>
+        <h2>Chetasi V trivedi-231IT019</h2>
 
-        
         <nav
           style={{
             marginBottom: "20px",
@@ -36,7 +43,10 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/ospf" element={<OSPFAnimation />} />
-          <Route path="/distance-vector" element={<DistanceVectorAnimation />} />
+          <Route
+            path="/distance-vector"
+            element={<DistanceVectorAnimation />}
+          />
           <Route path="/eigrp" element={<EIGRPAnimation />} />
         </Routes>
       </div>

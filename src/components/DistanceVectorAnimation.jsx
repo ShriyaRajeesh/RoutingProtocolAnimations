@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import * as d3 from "d3";
+import Papa from "papaparse";
 
 export default function DistanceVectorAnimation() {
   const [nodes, setNodes] = useState([]);
@@ -11,7 +12,7 @@ export default function DistanceVectorAnimation() {
   const [localRouter, setLocalRouter] = useState("");
   const svgRef = useRef();
 
-  // D3 Visualization Setup
+  // D3 Visualization
   useEffect(() => {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -128,82 +129,115 @@ export default function DistanceVectorAnimation() {
     return () => simulation.stop();
   }, [nodes, links, localRouter]);
 
-  // Add bidirectional link
- const handleAddLink = () => {
-  // Check if cost is valid
-  if (cost < 0) {
-    alert("Please enter a valid cost. It cannot be less than zero.");
-    return;
-  }
+  // Add link
+  const handleAddLink = () => {
+    if (cost < 0) {
+      alert("Cost cannot be negative");
+      return;
+    }
+    if (!source || !target || !cost) {
+      alert("Fill all fields");
+      return;
+    }
 
-  // Check for missing fields
-  if (!source || !target || !cost) {
-    alert("Please fill in all fields.");
-    return;
-  }
+    if (!nodes.find((n) => n.id === source))
+      setNodes((prev) => [...prev, { id: source }]);
+    if (!nodes.find((n) => n.id === target))
+      setNodes((prev) => [...prev, { id: target }]);
 
-  // Add new nodes if they don't exist
-  if (!nodes.find((n) => n.id === source))
-    setNodes((prev) => [...prev, { id: source }]);
-  if (!nodes.find((n) => n.id === target))
-    setNodes((prev) => [...prev, { id: target }]);
+    const existing = links.find(
+      (l) =>
+        (l.source.id === source && l.target.id === target) ||
+        (l.source.id === target && l.target.id === source)
+    );
 
-  // Update or Add link
-const existing = links.find(
-  (l) =>
-    (l.source.id === source && l.target.id === target) ||
-    (l.source.id === target && l.target.id === source)
-);
+    if (existing) {
+      const confirmUpdate = window.confirm(
+        `Update cost between ${source} and ${target}?`
+      );
+      if (!confirmUpdate) return;
+      setLinks((prev) =>
+        prev.map((l) =>
+          (l.source.id === source && l.target.id === target) ||
+          (l.source.id === target && l.target.id === source)
+            ? { ...l, cost: parseInt(cost, 10) }
+            : l
+        )
+      );
+    } else {
+      setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
+    }
 
-if (existing) {
-  const confirmUpdate = window.confirm(
-    `A link between ${source} and ${target} already exists. Do you want to update its cost?`
-  );
-  if (!confirmUpdate) return;
+    setSource("");
+    setTarget("");
+    setCost("");
+  };
 
-  setLinks((prev) =>
-    prev.map((l) =>
-      (l.source.id === source && l.target.id === target) ||
-      (l.source.id === target && l.target.id === source)
-        ? { ...l, cost: parseInt(cost, 10) }
-        : l
-    )
-  );
-  alert(`Cost between ${source} and ${target} updated to ${cost}.`);
-} else {
-  setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
-}
+  // CSV Upload
+  const handleCSVUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const data = results.data;
+        const newNodes = new Set(nodes.map((n) => n.id));
+        const newLinks = [...links];
+        data.forEach((row) => {
+          const { source, target, cost } = row;
+          if (!newNodes.has(source)) newNodes.add(source);
+          if (!newNodes.has(target)) newNodes.add(target);
+          newLinks.push({ source, target, cost: parseInt(cost, 10) });
+        });
+        setNodes([...Array.from(newNodes)].map((id) => ({ id })));
+        setLinks(newLinks);
+      },
+    });
+  };
 
-  // Reset input fields
-  setSource("");
-  setTarget("");
-  setCost("");
-};
+  // CSV Download of routing tables
+  const downloadCSV = () => {
+    if (!Object.keys(routingTables).length) return;
+    let allData = [];
+    Object.entries(routingTables).forEach(([router, table]) => {
+      Object.entries(table).forEach(([dest, entry]) => {
+        allData.push({
+          router,
+          destination: dest,
+          cost: entry.cost === Infinity ? "∞" : entry.cost,
+          nextHop: entry.nextHop,
+        });
+      });
+    });
+    const csv = Papa.unparse(allData);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "distance_vector_routing.csv";
+    link.click();
+  };
 
-  // Initialize routing tables when nodes/links change
+  // Initialize routing tables
   useEffect(() => {
     const newTables = {};
     nodes.forEach((node) => {
       newTables[node.id] = {};
       nodes.forEach((dest) => {
-        if (node.id === dest.id)
-          newTables[node.id][dest.id] = { cost: 0, nextHop: node.id };
-        else newTables[node.id][dest.id] = { cost: Infinity, nextHop: "-" };
+        newTables[node.id][dest.id] = {
+          cost: node.id === dest.id ? 0 : Infinity,
+          nextHop: node.id === dest.id ? node.id : "-",
+        };
       });
     });
-
-    // Add direct neighbor info
     links.forEach((l) => {
-      newTables[l.source.id][l.target.id] = {
-        cost: l.cost,
-        nextHop: l.target.id,
-      };
+      newTables[l.source.id][l.target.id] = { cost: l.cost, nextHop: l.target.id };
+      newTables[l.target.id][l.source.id] = { cost: l.cost, nextHop: l.source.id };
     });
-
     setRoutingTables(newTables);
   }, [nodes, links]);
 
-  // Distance Vector Algorithm (RIP)
+  // Distance Vector (RIP) algorithm
   const runRIP = () => {
     const svg = d3.select(svgRef.current);
     let updatedTables = JSON.parse(JSON.stringify(routingTables));
@@ -211,41 +245,41 @@ if (existing) {
     let round = 0;
 
     const runRound = () => {
-      if (!changed || round > 10) return; // stop after stable or 10 rounds
+      if (!changed || round > 10) return;
       changed = false;
       round++;
 
-      // Animation for this round
+      // Animation
       nodes.forEach((node, i) => {
-        const outgoing = links.filter((l) => l.source.id === node.id);
-        outgoing.forEach((d, j) => {
-          setTimeout(() => {
-            const packet = svg
-              .append("circle")
-              .attr("r", 6)
-              .attr("fill", "limegreen")
-              .attr("cx", d.source.x)
-              .attr("cy", d.source.y);
+        links
+          .filter((l) => l.source.id === node.id)
+          .forEach((d, j) => {
+            setTimeout(() => {
+              const packet = svg
+                .append("circle")
+                .attr("r", 6)
+                .attr("fill", "limegreen")
+                .attr("cx", d.source.x)
+                .attr("cy", d.source.y);
 
-            packet
-              .transition()
-              .duration(1500)
-              .attrTween(
-                "cx",
-                () => (t) => d.source.x + t * (d.target.x - d.source.x)
-              )
-              .attrTween(
-                "cy",
-                () => (t) => d.source.y + t * (d.target.y - d.source.y)
-              )
-              .on("end", () => packet.remove());
-          }, i * 500 + j * 300);
-        });
+              packet
+                .transition()
+                .duration(1500)
+                .attrTween(
+                  "cx",
+                  () => (t) => d.source.x + t * (d.target.x - d.source.x)
+                )
+                .attrTween(
+                  "cy",
+                  () => (t) => d.source.y + t * (d.target.y - d.source.y)
+                )
+                .on("end", () => packet.remove());
+            }, i * 500 + j * 300);
+          });
       });
 
-      // Distance vector update logic
+      // Distance Vector update
       let newTables = JSON.parse(JSON.stringify(updatedTables));
-
       nodes.forEach((node) => {
         links
           .filter((l) => l.source.id === node.id)
@@ -307,6 +341,7 @@ if (existing) {
           onChange={(e) => setCost(e.target.value)}
         />
         <button onClick={handleAddLink}>Add Link</button>
+        <input type="file" accept=".csv" onChange={handleCSVUpload} />
       </div>
 
       <svg
@@ -318,7 +353,10 @@ if (existing) {
 
       <div style={{ marginTop: 20 }}>
         <button onClick={runRIP} style={{ padding: "10px 15px" }}>
-          Run RIP (Distance Vector Updates)
+          Run RIP
+        </button>
+        <button onClick={downloadCSV} style={{ padding: "10px 15px", marginLeft: 10 }}>
+          Download Routing Tables CSV
         </button>
       </div>
 
@@ -341,9 +379,7 @@ if (existing) {
               background: "#fff",
             }}
           >
-            <h4 style={{ textAlign: "center", color: "#333" }}>
-              Router {router}
-            </h4>
+            <h4 style={{ textAlign: "center", color: "#333" }}>Router {router}</h4>
             <table
               style={{
                 width: "100%",

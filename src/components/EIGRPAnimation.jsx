@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import * as d3 from "d3";
+import Papa from "papaparse";
 
 export default function EIGRPAnimation() {
   const [nodes, setNodes] = useState([]);
@@ -106,58 +107,82 @@ export default function EIGRPAnimation() {
     return () => simulation.stop();
   }, [nodes, links, localRouter]);
 
+  // Add link manually
   const handleAddLink = () => {
-  // Check if cost is valid
-  if (cost < 0) {
-    alert("Please enter a valid cost. It cannot be less than zero.");
-    return;
-  }
+    if (cost < 0) {
+      alert("Please enter a valid cost. It cannot be less than zero.");
+      return;
+    }
+    if (!source || !target || !cost) {
+      alert("Please fill in all fields.");
+      return;
+    }
+    if (!nodes.find((n) => n.id === source))
+      setNodes((prev) => [...prev, { id: source }]);
+    if (!nodes.find((n) => n.id === target))
+      setNodes((prev) => [...prev, { id: target }]);
 
-  // Check for missing fields
-  if (!source || !target || !cost) {
-    alert("Please fill in all fields.");
-    return;
-  }
+    const existing = links.find(
+      (l) =>
+        (l.source.id === source && l.target.id === target) ||
+        (l.source.id === target && l.target.id === source)
+    );
+    if (existing) {
+      const confirmUpdate = window.confirm(
+        `A link between ${source} and ${target} already exists. Update cost?`
+      );
+      if (!confirmUpdate) return;
+      setLinks((prev) =>
+        prev.map((l) =>
+          (l.source.id === source && l.target.id === target) ||
+          (l.source.id === target && l.target.id === source)
+            ? { ...l, cost: parseInt(cost, 10) }
+            : l
+        )
+      );
+    } else {
+      setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
+    }
+    setSource("");
+    setTarget("");
+    setCost("");
+  };
 
-  // Add new nodes if they don't exist
-  if (!nodes.find((n) => n.id === source))
-    setNodes((prev) => [...prev, { id: source }]);
-  if (!nodes.find((n) => n.id === target))
-    setNodes((prev) => [...prev, { id: target }]);
+  // CSV Upload
+  const handleCSVUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const data = results.data;
+        const newNodes = new Set(nodes.map((n) => n.id));
+        const newLinks = [...links];
+        data.forEach((row) => {
+          const { source, target, cost } = row;
+          if (!newNodes.has(source)) newNodes.add(source);
+          if (!newNodes.has(target)) newNodes.add(target);
+          newLinks.push({ source, target, cost: parseInt(cost, 10) });
+        });
+        setNodes([...Array.from(newNodes)].map((id) => ({ id })));
+        setLinks(newLinks);
+      },
+    });
+  };
 
-  // Update or Add link
-const existing = links.find(
-  (l) =>
-    (l.source.id === source && l.target.id === target) ||
-    (l.source.id === target && l.target.id === source)
-);
+  // CSV Download of routing table
+  const downloadCSV = () => {
+    if (!routingTable.length) return;
+    const csv = Papa.unparse(routingTable);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "routing_table.csv";
+    link.click();
+  };
 
-if (existing) {
-  const confirmUpdate = window.confirm(
-    `A link between ${source} and ${target} already exists. Do you want to update its cost?`
-  );
-  if (!confirmUpdate) return;
-
-  setLinks((prev) =>
-    prev.map((l) =>
-      (l.source.id === source && l.target.id === target) ||
-      (l.source.id === target && l.target.id === source)
-        ? { ...l, cost: parseInt(cost, 10) }
-        : l
-    )
-  );
-  alert(`Cost between ${source} and ${target} updated to ${cost}.`);
-} else {
-  setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
-}
-
-  // Reset input fields
-  setSource("");
-  setTarget("");
-  setCost("");
-};
-
-
+  // EIGRP Algorithm
   const runEIGRP = async () => {
     const svg = d3.select(svgRef.current);
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -167,13 +192,11 @@ if (existing) {
       return;
     }
 
-    // Initialize distance table for each router
     const distTable = {};
     nodes.forEach((n) => {
       distTable[n.id] = {};
       nodes.forEach((m) => {
-        if (n.id === m.id) distTable[n.id][m.id] = 0;
-        else distTable[n.id][m.id] = Infinity;
+        distTable[n.id][m.id] = n.id === m.id ? 0 : Infinity;
       });
     });
 
@@ -185,10 +208,9 @@ if (existing) {
     let updated = true;
     while (updated) {
       updated = false;
-
       for (let router of nodes) {
         for (let neighborLink of links.filter(
-          l => l.source.id === router.id || l.target.id === router.id
+          (l) => l.source.id === router.id || l.target.id === router.id
         )) {
           const neighborId = neighborLink.source.id === router.id ? neighborLink.target.id : neighborLink.source.id;
           for (let dest of nodes) {
@@ -198,19 +220,15 @@ if (existing) {
               distTable[router.id][dest.id] = newCost;
               updated = true;
 
-              // Animate packet
               const current = nodeMap.get(router.id);
               const neighbor = nodeMap.get(neighborId);
-              const packet = svg
-                .append("circle")
+              const packet = svg.append("circle")
                 .attr("r", 6)
                 .attr("fill", "orange")
                 .attr("cx", current.x)
                 .attr("cy", current.y);
 
-              packet
-                .transition()
-                .duration(500)
+              packet.transition().duration(500)
                 .attr("cx", neighbor.x)
                 .attr("cy", neighbor.y)
                 .on("end", () => packet.remove());
@@ -218,21 +236,17 @@ if (existing) {
           }
         }
       }
-
-      // Small delay
       await new Promise((r) => setTimeout(r, 600));
     }
 
-    // Build routing table for local router
+    // Routing table for local router
     const tableData = [];
     nodes.forEach((n) => {
       if (n.id === localRouter) return;
-
       let nextHop = "-";
-      // find neighbor giving best path
       let minCost = distTable[localRouter][n.id];
       for (let neighborLink of links.filter(
-        l => l.source.id === localRouter || l.target.id === localRouter
+        (l) => l.source.id === localRouter || l.target.id === localRouter
       )) {
         const neighborId = neighborLink.source.id === localRouter ? neighborLink.target.id : neighborLink.source.id;
         if (distTable[localRouter][neighborId] + distTable[neighborId][n.id] === minCost) {
@@ -240,14 +254,12 @@ if (existing) {
           break;
         }
       }
-
       tableData.push({
         destination: n.id,
         cost: minCost === Infinity ? "∞" : minCost,
-        nextHop: nextHop,
+        nextHop,
       });
     });
-
     setRoutingTable(tableData);
   };
 
@@ -288,6 +300,10 @@ if (existing) {
         <button onClick={handleAddLink}>Add Link</button>
       </div>
 
+      <div style={{ marginBottom: 10 }}>
+        <input type="file" accept=".csv" onChange={handleCSVUpload} />
+      </div>
+
       <svg
         ref={svgRef}
         width={700}
@@ -298,6 +314,9 @@ if (existing) {
       <div style={{ marginTop: 20 }}>
         <button onClick={runEIGRP} style={{ padding: "10px 15px" }}>
           Run EIGRP
+        </button>
+        <button onClick={downloadCSV} style={{ padding: "10px 15px", marginLeft: 10 }}>
+          Download Routing Table CSV
         </button>
       </div>
 
@@ -314,29 +333,17 @@ if (existing) {
           >
             <thead style={{ background: "#444", color: "white" }}>
               <tr>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
-                  Destination
-                </th>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
-                  Cost
-                </th>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
-                  Next Hop
-                </th>
+                <th style={{ padding: "8px", border: "1px solid #ccc" }}>Destination</th>
+                <th style={{ padding: "8px", border: "1px solid #ccc" }}>Cost</th>
+                <th style={{ padding: "8px", border: "1px solid #ccc" }}>Next Hop</th>
               </tr>
             </thead>
             <tbody>
               {routingTable.map((row, i) => (
                 <tr key={i}>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
-                    {row.destination}
-                  </td>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
-                    {row.cost}
-                  </td>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
-                    {row.nextHop}
-                  </td>
+                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>{row.destination}</td>
+                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>{row.cost}</td>
+                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>{row.nextHop}</td>
                 </tr>
               ))}
             </tbody>
