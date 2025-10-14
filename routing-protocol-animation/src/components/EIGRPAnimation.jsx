@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import * as d3 from "d3";
 
-export default function OSPFAnimation() {
+export default function EIGRPAnimation() {
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
   const [source, setSource] = useState("");
@@ -11,7 +11,7 @@ export default function OSPFAnimation() {
   const [routingTable, setRoutingTable] = useState([]);
   const svgRef = useRef();
 
-  //  Visualization 
+  // Visualization
   useEffect(() => {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -34,7 +34,6 @@ export default function OSPFAnimation() {
       .attr("stroke", "#999")
       .attr("stroke-width", 2);
 
-
     const linkLabels = svg
       .selectAll(".link-label")
       .data(links)
@@ -44,7 +43,6 @@ export default function OSPFAnimation() {
       .attr("font-size", "12px")
       .attr("fill", "#000")
       .text((d) => d.cost);
-
 
     const node = svg
       .selectAll("circle")
@@ -62,7 +60,6 @@ export default function OSPFAnimation() {
           .on("drag", dragged)
           .on("end", dragEnded)
       );
-
 
     const labels = svg
       .selectAll(".label")
@@ -109,8 +106,7 @@ export default function OSPFAnimation() {
     return () => simulation.stop();
   }, [nodes, links, localRouter]);
 
-  
-const handleAddLink = () => {
+  const handleAddLink = () => {
   // Check if cost is valid
   if (cost < 0) {
     alert("Please enter a valid cost. It cannot be less than zero.");
@@ -162,134 +158,93 @@ if (existing) {
 };
 
 
-  const runOSPF = async () => {
+  const runEIGRP = async () => {
     const svg = d3.select(svgRef.current);
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-    const visited = new Set();
 
     if (!localRouter || !nodeMap.has(localRouter)) {
       alert("Please enter a valid Local Router ID present in the graph.");
       return;
     }
 
-    
-    async function flood(currentId) {
-      if (visited.has(currentId)) return;
-      visited.add(currentId);
-
-      const current = nodeMap.get(currentId);
-      const neighbors = links.filter(
-        (l) => l.source.id === currentId || l.target.id === currentId
-      );
-
-      const promises = neighbors.map(
-        (link) =>
-          new Promise((resolve) => {
-            const neighborId =
-              link.source.id === currentId ? link.target.id : link.source.id;
-            const neighbor = nodeMap.get(neighborId);
-
-            const packet = svg
-              .append("circle")
-              .attr("r", 6)
-              .attr("fill", "orange")
-              .attr("cx", current.x)
-              .attr("cy", current.y);
-
-            packet
-              .transition()
-              .duration(1000)
-              .attr("cx", neighbor.x)
-              .attr("cy", neighbor.y)
-              .on("end", () => {
-                packet.remove();
-                flood(neighborId).then(resolve);
-              });
-          })
-      );
-
-      await Promise.all(promises);
-    }
-
-    await flood(localRouter);
-
-    runDijkstra(svg, nodeMap);
-  };
-
-  const runDijkstra = (svg, nodeMap) => {
-    const dist = {};
-    const prev = {};
-    const unvisited = new Set(nodes.map((n) => n.id));
-
-    nodes.forEach((n) => (dist[n.id] = Infinity));
-    dist[localRouter] = 0;
-
-    while (unvisited.size > 0) {
-      const current = Array.from(unvisited).reduce((a, b) =>
-        dist[a] < dist[b] ? a : b
-      );
-      unvisited.delete(current);
-
-      const neighbors = links.filter(
-        (l) =>
-          (l.source.id === current && unvisited.has(l.target.id)) ||
-          (l.target.id === current && unvisited.has(l.source.id))
-      );
-
-      neighbors.forEach((link) => {
-        const neighborId =
-          link.source.id === current ? link.target.id : link.source.id;
-        const alt = dist[current] + link.cost;
-        if (alt < dist[neighborId]) {
-          dist[neighborId] = alt;
-          prev[neighborId] = current;
-        }
-      });
-    }
-
-    svg.selectAll(".link").attr("stroke", "#999").attr("stroke-width", 2);
-    Object.keys(prev).forEach((nodeId) => {
-      const parent = prev[nodeId];
-      if (!parent) return;
-      svg
-        .selectAll(".link")
-        .filter(
-          (d) =>
-            (d.source.id === nodeId && d.target.id === parent) ||
-            (d.source.id === parent && d.target.id === nodeId)
-        )
-        .attr("stroke", "green")
-        .attr("stroke-width", 3);
-    });
-
-    svg.selectAll(".distance-label").remove();
+    // Initialize distance table for each router
+    const distTable = {};
     nodes.forEach((n) => {
-      const router = nodeMap.get(n.id);
-      svg
-        .append("text")
-        .attr("class", "distance-label")
-        .attr("x", router.x + 25)
-        .attr("y", router.y - 15)
-        .attr("font-size", "11px")
-        .attr("fill", "green")
-        .text(dist[n.id] === Infinity ? "∞" : `Cost: ${dist[n.id]}`);
+      distTable[n.id] = {};
+      nodes.forEach((m) => {
+        if (n.id === m.id) distTable[n.id][m.id] = 0;
+        else distTable[n.id][m.id] = Infinity;
+      });
     });
 
+    links.forEach((l) => {
+      distTable[l.source.id][l.target.id] = l.cost;
+      distTable[l.target.id][l.source.id] = l.cost;
+    });
+
+    let updated = true;
+    while (updated) {
+      updated = false;
+
+      for (let router of nodes) {
+        for (let neighborLink of links.filter(
+          l => l.source.id === router.id || l.target.id === router.id
+        )) {
+          const neighborId = neighborLink.source.id === router.id ? neighborLink.target.id : neighborLink.source.id;
+          for (let dest of nodes) {
+            if (router.id === dest.id) continue;
+            const newCost = distTable[router.id][neighborId] + distTable[neighborId][dest.id];
+            if (newCost < distTable[router.id][dest.id]) {
+              distTable[router.id][dest.id] = newCost;
+              updated = true;
+
+              // Animate packet
+              const current = nodeMap.get(router.id);
+              const neighbor = nodeMap.get(neighborId);
+              const packet = svg
+                .append("circle")
+                .attr("r", 6)
+                .attr("fill", "orange")
+                .attr("cx", current.x)
+                .attr("cy", current.y);
+
+              packet
+                .transition()
+                .duration(500)
+                .attr("cx", neighbor.x)
+                .attr("cy", neighbor.y)
+                .on("end", () => packet.remove());
+            }
+          }
+        }
+      }
+
+      // Small delay
+      await new Promise((r) => setTimeout(r, 600));
+    }
+
+    // Build routing table for local router
     const tableData = [];
     nodes.forEach((n) => {
       if (n.id === localRouter) return;
 
-      
-      let hop = n.id;
-      let parent = prev[hop];
-      while (parent && parent !== localRouter) {
-        hop = parent;
-        parent = prev[hop];
+      let nextHop = "-";
+      // find neighbor giving best path
+      let minCost = distTable[localRouter][n.id];
+      for (let neighborLink of links.filter(
+        l => l.source.id === localRouter || l.target.id === localRouter
+      )) {
+        const neighborId = neighborLink.source.id === localRouter ? neighborLink.target.id : neighborLink.source.id;
+        if (distTable[localRouter][neighborId] + distTable[neighborId][n.id] === minCost) {
+          nextHop = neighborId;
+          break;
+        }
       }
+
       tableData.push({
         destination: n.id,
-        cost: dist[n.id] === Infinity ? "∞" : dist[n.id],
-        nextHop: dist[n.id] === Infinity ? "-" : hop,
+        cost: minCost === Infinity ? "∞" : minCost,
+        nextHop: nextHop,
       });
     });
 
@@ -298,15 +253,15 @@ if (existing) {
 
   return (
     <div style={{ maxWidth: "900px", margin: "auto" }}>
-      <h2>OSPF Link-State Routing </h2>
+      <h2>EIGRP Distance Vector Routing</h2>
 
       <div style={{ marginBottom: 10 }}>
-        <label>Source Router ID:</label>
+        <label>Local Router ID:</label>
         <input
           type="text"
           value={localRouter}
           onChange={(e) => setLocalRouter(e.target.value.trim())}
-          placeholder="Enter Source router ID"
+          placeholder="Enter Local router ID"
           style={{ marginLeft: 10 }}
         />
       </div>
@@ -341,14 +296,14 @@ if (existing) {
       />
 
       <div style={{ marginTop: 20 }}>
-        <button onClick={runOSPF} style={{ padding: "10px 15px" }}>
-          Run OSPF
+        <button onClick={runEIGRP} style={{ padding: "10px 15px" }}>
+          Run EIGRP
         </button>
       </div>
 
       {routingTable.length > 0 && (
         <div style={{ marginTop: 30 }}>
-          <h3>OSPF Routing Table</h3>
+          <h3>EIGRP Routing Table</h3>
           <table
             style={{
               width: "100%",
