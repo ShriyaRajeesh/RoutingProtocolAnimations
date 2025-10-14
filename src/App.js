@@ -1,43 +1,68 @@
-import React, { useState } from "react";
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import OSPFAnimation from "./components/OSPFAnimation";
+import DistanceVectorAnimation from "./components/DistanceVectorAnimation";
 import EIGRPAnimation from "./components/EIGRPAnimation";
-// import OSPFAnimation from "./components/OSPFAnimation";
-// import RIPAnimation from "./components/RIPAnimation";
 
-export default function App() {
-  const [selectedProtocol, setSelectedProtocol] = useState("EIGRP");
-
-  const renderProtocol = () => {
-    switch (selectedProtocol) {
-      case "EIGRP":
-        return <EIGRPAnimation />;
-        
-      default:
-        return <EIGRPAnimation />;
-    }
-  };
-
+function App() {
   return (
-    <div style={{ textAlign: "center", fontFamily: "Arial, sans-serif" }}>
-      <h1 style={{ marginTop: 20 }}>Routing Protocol Visualizer</h1>
+    <Router>
+      <div style={{ textAlign: "center", padding: "20px" }}>
+        <h1>Routing Protocol Visualization</h1>
 
-      <div style={{ margin: "20px 0" }}>
-        <button
-          onClick={() => setSelectedProtocol("EIGRP")}
+        
+        <nav
           style={{
-            margin: 5,
-            padding: "10px 15px",
-            backgroundColor: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: 5,
-            cursor: "pointer",
+            marginBottom: "20px",
+            display: "flex",
+            justifyContent: "center",
+            gap: "15px",
           }}
         >
-          EIGRP
-        </button>
-      </div>
+          <Link to="/ospf">
+            <button style={buttonStyle}>OSPF Visualization</button>
+          </Link>
 
-      <div style={{ padding: 20 }}>{renderProtocol()}</div>
+          <Link to="/distance-vector">
+            <button style={buttonStyle}>Distance Vector Visualization</button>
+          </Link>
+
+          <Link to="/eigrp">
+            <button style={buttonStyle}>EIGRP Visualization</button>
+          </Link>
+        </nav>
+
+        {/* Route Definitions */}
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/ospf" element={<OSPFAnimation />} />
+          <Route path="/distance-vector" element={<DistanceVectorAnimation />} />
+          <Route path="/eigrp" element={<EIGRPAnimation />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+// Home Page Component
+function HomePage() {
+  return (
+    <div>
+      <h2>Welcome to Routing Protocol Visualizer</h2>
+      <p>Select a protocol above to begin the visualization.</p>
     </div>
   );
 }
+
+// Simple Button Style
+const buttonStyle = {
+  padding: "10px 15px",
+  fontSize: "16px",
+  cursor: "pointer",
+  borderRadius: "8px",
+  border: "1px solid #ccc",
+  backgroundColor: "#007bff",
+  color: "white",
+};
+
+export default App;
