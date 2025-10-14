@@ -10,6 +10,7 @@ export default function App() {
     switch (selectedProtocol) {
       case "EIGRP":
         return <EIGRPAnimation />;
+        
       default:
         return <EIGRPAnimation />;
     }
