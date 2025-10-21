@@ -2,6 +2,17 @@ import React, { useState, useRef, useEffect } from "react";
 import * as d3 from "d3";
 import Papa from "papaparse";
 
+
+/**
+ * EIGRP Distance Vector Simulation with D3 Visualization
+ * ------------------------------------------------------
+ * Features:
+ *  - Add routers and links manually or via CSV upload
+ *  - Run EIGRP simulation with packet animation
+ *  - Export final routing table as CSV
+ *  - Clear topology for a new attempt
+ */
+
 export default function EIGRPAnimation() {
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
@@ -12,7 +23,22 @@ export default function EIGRPAnimation() {
   const [routingTable, setRoutingTable] = useState([]);
   const svgRef = useRef();
 
-  // Visualization
+  /**
+   * Clears the entire topology and routing table.
+   */
+  const clearTopology = () => {
+    setNodes([]);
+    setLinks([]);
+    setRoutingTable([]);
+    setLocalRouter("");
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+    console.log("Topology cleared.");
+  };
+
+  /**
+   * D3 Visualization: updates whenever nodes/links change
+   */
   useEffect(() => {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -26,15 +52,17 @@ export default function EIGRPAnimation() {
       .force("charge", d3.forceManyBody().strength(-300))
       .force("center", d3.forceCenter(width / 2, height / 2));
 
+    // Draw links
     const link = svg
       .selectAll(".link")
       .data(links)
       .enter()
       .append("line")
       .attr("class", "link")
-      .attr("stroke", "#999")
+      .attr("stroke", "#888")
       .attr("stroke-width", 2);
 
+    // Draw link cost labels
     const linkLabels = svg
       .selectAll(".link-label")
       .data(links)
@@ -45,7 +73,8 @@ export default function EIGRPAnimation() {
       .attr("fill", "#000")
       .text((d) => d.cost);
 
-    const node = svg
+    // Draw routers as circles
+    const routerNode = svg
       .selectAll("image")
       .data(nodes)
       .enter()
@@ -68,6 +97,7 @@ export default function EIGRPAnimation() {
           .on("end", dragEnded)
       );
 
+    // Router labels
     const labels = svg
       .selectAll(".label")
       .data(nodes)
@@ -76,8 +106,8 @@ export default function EIGRPAnimation() {
       .attr("class", "label")
       .attr("text-anchor", "middle")
       .attr("dy", 5)
-      .attr("font-size", "12px")
-      .attr("fill", "black")
+      .attr("font-size", "13px")
+      .attr("fill", "#fff")
       .text((d) => d.id);
 
     simulation.on("tick", () => {
@@ -91,14 +121,13 @@ export default function EIGRPAnimation() {
         .attr("x", (d) => (d.source.x + d.target.x) / 2)
         .attr("y", (d) => (d.source.y + d.target.y) / 2);
 
-      node
+      routerNode
         .attr("x", (d) => d.x - 22) // center the image
         .attr("y", (d) => d.y - 22);
 
       labels
         .attr("x", (d) => d.x)
         .attr("y", (d) => d.y + 35); // slightly below the router icon
-
     });
 
     function dragStarted(event, d) {
@@ -119,17 +148,20 @@ export default function EIGRPAnimation() {
     return () => simulation.stop();
   }, [nodes, links, localRouter]);
 
-  // Add link manually
+  /**
+   * Add a new link manually between routers
+   */
   const handleAddLink = () => {
-    if (cost < 0) {
-      alert("Please enter a valid cost. It cannot be less than zero.");
-      return;
-    }
     if (!source || !target || !cost) {
       alert("Please fill in all fields.");
       return;
     }
-    if (!nodes.find((n) => n.id === source))
+    if (parseInt(cost) < 0) {
+      alert("Cost cannot be negative.");
+      return;
+    }
+
+   if (!nodes.find((n) => n.id === source))
       setNodes((prev) => [
         ...prev,
         { id: source, x: Math.random() * 700, y: Math.random() * 450 }
@@ -140,15 +172,15 @@ export default function EIGRPAnimation() {
         { id: target, x: Math.random() * 700, y: Math.random() * 450 }
       ]);
 
-
     const existing = links.find(
       (l) =>
         (l.source.id === source && l.target.id === target) ||
         (l.source.id === target && l.target.id === source)
     );
+
     if (existing) {
       const confirmUpdate = window.confirm(
-        `A link between ${source} and ${target} already exists. Update cost?`
+        `Link between ${source} and ${target} exists. Update cost?`
       );
       if (!confirmUpdate) return;
       setLinks((prev) =>
@@ -160,17 +192,24 @@ export default function EIGRPAnimation() {
         )
       );
     } else {
-      setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
+      setLinks((prev) => [
+        ...prev,
+        { source, target, cost: parseInt(cost, 10) },
+      ]);
     }
+
     setSource("");
     setTarget("");
     setCost("");
   };
 
-  // CSV Upload
+  /**
+   * Upload CSV (columns: source, target, cost)
+   */
   const handleCSVUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -178,19 +217,22 @@ export default function EIGRPAnimation() {
         const data = results.data;
         const newNodes = new Set(nodes.map((n) => n.id));
         const newLinks = [...links];
-        data.forEach((row) => {
-          const { source, target, cost } = row;
+
+        data.forEach(({ source, target, cost }) => {
           if (!newNodes.has(source)) newNodes.add(source);
           if (!newNodes.has(target)) newNodes.add(target);
           newLinks.push({ source, target, cost: parseInt(cost, 10) });
         });
+
         setNodes([...Array.from(newNodes)].map((id) => ({ id })));
         setLinks(newLinks);
       },
     });
   };
 
-  // CSV Download of routing table
+  /**
+   * Export routing table as CSV
+   */
   const downloadCSV = () => {
     if (!routingTable.length) return;
     const csv = Papa.unparse(routingTable);
@@ -201,13 +243,15 @@ export default function EIGRPAnimation() {
     link.click();
   };
 
-  // EIGRP Algorithm
+  /**
+   * Run EIGRP Algorithm + animate packet movement
+   */
   const runEIGRP = async () => {
     const svg = d3.select(svgRef.current);
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
     if (!localRouter || !nodeMap.has(localRouter)) {
-      alert("Please enter a valid Local Router ID present in the graph.");
+      alert("Please enter a valid local router ID.");
       return;
     }
 
@@ -227,27 +271,37 @@ export default function EIGRPAnimation() {
     let updated = true;
     while (updated) {
       updated = false;
-      for (let router of nodes) {
-        for (let neighborLink of links.filter(
+      for (const router of nodes) {
+        for (const link of links.filter(
           (l) => l.source.id === router.id || l.target.id === router.id
         )) {
-          const neighborId = neighborLink.source.id === router.id ? neighborLink.target.id : neighborLink.source.id;
-          for (let dest of nodes) {
+          const neighborId =
+            link.source.id === router.id ? link.target.id : link.source.id;
+
+          for (const dest of nodes) {
             if (router.id === dest.id) continue;
-            const newCost = distTable[router.id][neighborId] + distTable[neighborId][dest.id];
+
+            const newCost =
+              distTable[router.id][neighborId] +
+              distTable[neighborId][dest.id];
+
             if (newCost < distTable[router.id][dest.id]) {
               distTable[router.id][dest.id] = newCost;
               updated = true;
 
+              // Animate packet between routers
               const current = nodeMap.get(router.id);
               const neighbor = nodeMap.get(neighborId);
-              const packet = svg.append("circle")
+              const packet = svg
+                .append("circle")
                 .attr("r", 6)
                 .attr("fill", "orange")
                 .attr("cx", current.x)
                 .attr("cy", current.y);
 
-              packet.transition().duration(500)
+              packet
+                .transition()
+                .duration(600)
                 .attr("cx", neighbor.x)
                 .attr("cy", neighbor.y)
                 .on("end", () => packet.remove());
@@ -255,48 +309,67 @@ export default function EIGRPAnimation() {
           }
         }
       }
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 700));
     }
 
-    // Routing table for local router
+    // Build routing table for local router
     const tableData = [];
     nodes.forEach((n) => {
       if (n.id === localRouter) return;
+      const minCost = distTable[localRouter][n.id];
       let nextHop = "-";
-      let minCost = distTable[localRouter][n.id];
-      for (let neighborLink of links.filter(
+
+      for (const link of links.filter(
         (l) => l.source.id === localRouter || l.target.id === localRouter
       )) {
-        const neighborId = neighborLink.source.id === localRouter ? neighborLink.target.id : neighborLink.source.id;
-        if (distTable[localRouter][neighborId] + distTable[neighborId][n.id] === minCost) {
+        const neighborId =
+          link.source.id === localRouter ? link.target.id : link.source.id;
+
+        if (
+          distTable[localRouter][neighborId] +
+            distTable[neighborId][n.id] ===
+          minCost
+        ) {
           nextHop = neighborId;
           break;
         }
       }
+
       tableData.push({
         destination: n.id,
         cost: minCost === Infinity ? "∞" : minCost,
         nextHop,
       });
     });
+
     setRoutingTable(tableData);
   };
 
   return (
-    <div style={{ maxWidth: "900px", margin: "auto" }}>
-      <h2>EIGRP Distance Vector Routing</h2>
+    <div
+      style={{
+        maxWidth: "900px",
+        margin: "auto",
+        fontFamily: "Inter, sans-serif",
+      }}
+    >
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+         EIGRP Distance Vector Simulation
+      </h2>
 
+      {/* Local Router Input */}
       <div style={{ marginBottom: 10 }}>
-        <label>Local Router ID:</label>
+        <label>Local Router ID: </label>
         <input
           type="text"
           value={localRouter}
           onChange={(e) => setLocalRouter(e.target.value.trim())}
-          placeholder="Enter Local router ID"
+          placeholder="Enter local router ID"
           style={{ marginLeft: 10 }}
         />
       </div>
 
+      {/* Add Link Section */}
       <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
         <input
           type="text"
@@ -319,29 +392,51 @@ export default function EIGRPAnimation() {
         <button onClick={handleAddLink}>Add Link</button>
       </div>
 
+      {/* CSV Upload */}
       <div style={{ marginBottom: 10 }}>
         <input type="file" accept=".csv" onChange={handleCSVUpload} />
       </div>
 
+      {/* Graph Canvas */}
       <svg
         ref={svgRef}
         width={700}
         height={450}
-        style={{ border: "1px solid #ccc", background: "#f8f9fa" }}
+        style={{
+          border: "1px solid #ccc",
+          background: "#f8f9fa",
+          borderRadius: "8px",
+        }}
       />
 
+      {/* Controls */}
       <div style={{ marginTop: 20 }}>
         <button onClick={runEIGRP} style={{ padding: "10px 15px" }}>
-          Run EIGRP
+           Run EIGRP
         </button>
-        <button onClick={downloadCSV} style={{ padding: "10px 15px", marginLeft: 10 }}>
-          Download Routing Table CSV
+        <button
+          onClick={downloadCSV}
+          style={{ padding: "10px 15px", marginLeft: 10 }}
+        >
+           Download Routing Table
+        </button>
+        <button
+          onClick={clearTopology}
+          style={{
+            padding: "10px 15px",
+            marginLeft: 10,
+            background: "#e74c3c",
+            color: "white",
+          }}
+        >
+           Clear Topology
         </button>
       </div>
 
+      {/* Routing Table */}
       {routingTable.length > 0 && (
         <div style={{ marginTop: 30 }}>
-          <h3>EIGRP Routing Table</h3>
+          <h3>Final Routing Table</h3>
           <table
             style={{
               width: "100%",
@@ -352,17 +447,29 @@ export default function EIGRPAnimation() {
           >
             <thead style={{ background: "#444", color: "white" }}>
               <tr>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>Destination</th>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>Cost</th>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>Next Hop</th>
+                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
+                  Destination
+                </th>
+                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
+                  Cost
+                </th>
+                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
+                  Next Hop
+                </th>
               </tr>
             </thead>
             <tbody>
               {routingTable.map((row, i) => (
                 <tr key={i}>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>{row.destination}</td>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>{row.cost}</td>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>{row.nextHop}</td>
+                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
+                    {row.destination}
+                  </td>
+                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
+                    {row.cost}
+                  </td>
+                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
+                    {row.nextHop}
+                  </td>
                 </tr>
               ))}
             </tbody>

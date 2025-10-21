@@ -11,6 +11,15 @@ export default function OSPFAnimation() {
   const [localRouter, setLocalRouter] = useState("");
   const [routingTable, setRoutingTable] = useState([]);
   const svgRef = useRef();
+   const clearTopology = () => {
+      setNodes([]);
+      setLinks([]);
+      setRoutingTable([]);
+      setLocalRouter("");
+      const svg = d3.select(svgRef.current);
+      svg.selectAll("*").remove();
+      console.log("Topology cleared.");
+    };
 
   // Visualization
   useEffect(() => {
@@ -385,7 +394,12 @@ export default function OSPFAnimation() {
         <button onClick={downloadCSV} style={{ padding: "10px 15px", marginLeft: 10 }}>
           Download Routing Table CSV
         </button>
+        <button onClick={clearTopology} style={{ padding: "10px 15px", marginLeft: 10 }}>
+          Clear Topology
+        </button>
+        
       </div>
+      
 
       {routingTable.length > 0 && (
         <div style={{ marginTop: 30 }}>
