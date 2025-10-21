@@ -2,14 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import * as d3 from "d3";
 import Papa from "papaparse";
 
-/**
- * Animated Distance Vector Routing (RIP-like)
- * - Hop-count metric only (link = 1)
- * - Split-horizon with poisoned reverse
- * - Step-by-step and animated converge modes
- * - Highlights changed entries per round
- */
-
 export default function DistanceVectorAnimation() {
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
@@ -38,34 +30,6 @@ export default function DistanceVectorAnimation() {
   };
 
   const getLinkId = (end) => (typeof end === "string" ? end : end.id);
-
-  const handleAddLink = () => {
-    if (!source || !target) return alert("Fill source and target");
-    if (source === target) return alert("Source and target must differ");
-
-    
-    if (!nodes.find((n) => n.id === source))
-      setNodes((prev) => [
-        ...prev,
-        { id: source, x: Math.random() * 700, y: Math.random() * 450 },
-      ]);
-    if (!nodes.find((n) => n.id === target))
-      setNodes((prev) => [
-        ...prev,
-        { id: target, x: Math.random() * 700, y: Math.random() * 450 },
-      ]);
-
-    const exists = links.find(
-      (l) =>
-        (getLinkId(l.source) === source && getLinkId(l.target) === target) ||
-        (getLinkId(l.source) === target && getLinkId(l.target) === source)
-    );
-    if (exists) return alert(`Link between ${source} and ${target} exists`);
-
-    setLinks((prev) => [...prev, { source, target }]);
-    setSource("");
-    setTarget("");
-  };
 
   const handleCSVUpload = (e) => {
     const file = e.target.files[0];
@@ -215,21 +179,19 @@ export default function DistanceVectorAnimation() {
       roundChangesObj[r] = Array.from(s);
     });
 
-    return { updatedTables, changed: anyChanged, roundChanges: roundChangesObj };
+    return {
+      updatedTables,
+      changed: anyChanged,
+      roundChanges: roundChangesObj,
+    };
   };
 
   const copyObject = (obj) => JSON.parse(JSON.stringify(obj));
 
-  const didChangeInRound = (round, router, dest) => {
-    if (!changedEntries[round]) return false;
-    const arr = changedEntries[round][router];
-    if (!arr) return false;
-    return arr.includes(dest);
-  };
-
   /** ----------------- ANIMATION ----------------- */
 
-  const animatePacketsOneRound = async (durationPerPacket = 350) => {
+  const animatePacketsOneRound = async (durationPerPacket = 800) => {
+    // slowed down
     const svg = d3.select(svgRef.current);
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
@@ -257,34 +219,10 @@ export default function DistanceVectorAnimation() {
           .attrTween("cy", () => (tt) => sObj.y + tt * (tObj.y - sObj.y))
           .on("end", () => packet.remove());
 
-        await sleep(60);
+        await sleep(100);
       }
-      await sleep(30);
+      await sleep(50);
     }
-  };
-
-  const stepOneRound = async () => {
-    if (!nodes.length) return alert("Add nodes/links first");
-    if (isAnimating) return;
-    setIsAnimating(true);
-
-    let baseTables = JSON.parse(JSON.stringify(routingTables));
-    const { updatedTables, changed, roundChanges } =
-      performOneRoundWithDiff(baseTables);
-
-    const nextRound = roundCount + 1;
-    setChangedEntries((prev) => ({ ...prev, [nextRound]: roundChanges }));
-    setRoutingTables(JSON.parse(JSON.stringify(updatedTables)));
-    setRoundCount(nextRound);
-
-    await sleep(800);
-    setChangedEntries((prev) => {
-      const copy = { ...copyObject(prev) };
-      delete copy[nextRound];
-      return copy;
-    });
-
-    setIsAnimating(false);
   };
 
   const animateConverge = async () => {
@@ -297,7 +235,7 @@ export default function DistanceVectorAnimation() {
     let round = 0;
     while (round < maxRounds) {
       round++;
-      await animatePacketsOneRound(300);
+      await animatePacketsOneRound(600); // slowed down
       const { updatedTables, changed, roundChanges } =
         performOneRoundWithDiff(tables);
 
@@ -308,7 +246,7 @@ export default function DistanceVectorAnimation() {
       setRoutingTables(JSON.parse(JSON.stringify(updatedTables)));
       setRoundCount((c) => c + 1);
 
-      await sleep(700);
+      await sleep(1000);
       setChangedEntries((prev) => {
         const copy = { ...copyObject(prev) };
         delete copy[roundCount + 1];
@@ -322,7 +260,6 @@ export default function DistanceVectorAnimation() {
   };
 
   /** ----------------- D3 VISUALIZATION ----------------- */
-
   useEffect(() => {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -380,23 +317,11 @@ export default function DistanceVectorAnimation() {
       .data(nodes)
       .enter()
       .append("image")
-      .attr("xlink:href", (d) =>
-        d.id === localRouter ? "/modem.png" : "/modem.png"
-      )
+      .attr("xlink:href", (d) => "/modem.png")
       .attr("width", 45)
       .attr("height", 45)
       .attr("x", (d) => d.x - 22)
-      .attr("y", (d) => d.y - 22)
-      .attr("filter", (d) =>
-        d.id === localRouter ? "drop-shadow(0 0 6px tomato)" : null
-      )
-      .call(
-        d3
-          .drag()
-          .on("start", dragStarted)
-          .on("drag", dragged)
-          .on("end", dragEnded)
-      );
+      .attr("y", (d) => d.y - 22);
 
     const labels = svg
       .selectAll(".label")
@@ -421,32 +346,12 @@ export default function DistanceVectorAnimation() {
         .attr("x", (d) => (d.source.x + d.target.x) / 2)
         .attr("y", (d) => (d.source.y + d.target.y) / 2);
 
-     node
-        .attr("x", (d) => d.x - 22) // center the image
-        .attr("y", (d) => d.y - 22);
-
-      labels
-        .attr("x", (d) => d.x)
-        .attr("y", (d) => d.y + 35); // slightly below the router icon
+      node.attr("x", (d) => d.x - 22).attr("y", (d) => d.y - 22);
+      labels.attr("x", (d) => d.x).attr("y", (d) => d.y + 35);
     });
 
-    function dragStarted(event, d) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      d.fx = d.x;
-      d.fy = d.y;
-    }
-    function dragged(event, d) {
-      d.fx = event.x;
-      d.fy = event.y;
-    }
-    function dragEnded(event, d) {
-      if (!event.active) simulation.alphaTarget(0);
-      d.fx = null;
-      d.fy = null;
-    }
-
     return () => simulation.stop();
-  }, [nodes, links, localRouter]);
+  }, [nodes, links]);
 
   /** ----------------- ROUTING TABLE INIT ----------------- */
   useEffect(() => {
@@ -465,8 +370,10 @@ export default function DistanceVectorAnimation() {
     links.forEach((l) => {
       const s = getLinkId(l.source);
       const t = getLinkId(l.target);
-      if (newTables[s]) newTables[s][t] = { cost: linkCost, nextHop: t, state: "valid" };
-      if (newTables[t]) newTables[t][s] = { cost: linkCost, nextHop: s, state: "valid" };
+      if (newTables[s])
+        newTables[s][t] = { cost: linkCost, nextHop: t, state: "valid" };
+      if (newTables[t])
+        newTables[t][s] = { cost: linkCost, nextHop: s, state: "valid" };
     });
 
     setRoutingTables(newTables);
@@ -494,19 +401,6 @@ export default function DistanceVectorAnimation() {
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-        <input
-          type="text"
-          placeholder="Source"
-          value={source}
-          onChange={(e) => setSource(e.target.value.trim())}
-        />
-        <input
-          type="text"
-          placeholder="Target"
-          value={target}
-          onChange={(e) => setTarget(e.target.value.trim())}
-        />
-        <button onClick={handleAddLink}>Add Link (hop = 1)</button>
         <input type="file" accept=".csv" onChange={handleCSVUpload} />
       </div>
 
@@ -518,10 +412,68 @@ export default function DistanceVectorAnimation() {
       />
 
       <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-        <button onClick={stepOneRound}>Step 1 Round</button>
         <button onClick={animateConverge}>Animate Converge</button>
         <button onClick={clearTopology}>Clear Topology</button>
         <button onClick={downloadCSV}>Download CSV</button>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <h3>Routing Tables</h3>
+        {Object.keys(routingTables).length === 0 ? (
+          <p>No routing tables available.</p>
+        ) : (
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+            {Object.entries(routingTables).map(([router, table]) => (
+              <table
+                key={router}
+                style={{ borderCollapse: "collapse", border: "1px solid #ccc" }}
+              >
+                <thead>
+                  <tr>
+                    <th
+                      colSpan={4}
+                      style={{ border: "1px solid #ccc", padding: 5 }}
+                    >
+                      Router {router}
+                    </th>
+                  </tr>
+                  <tr>
+                    <th style={{ border: "1px solid #ccc", padding: 5 }}>
+                      Destination
+                    </th>
+                    <th style={{ border: "1px solid #ccc", padding: 5 }}>
+                      Cost
+                    </th>
+                    <th style={{ border: "1px solid #ccc", padding: 5 }}>
+                      Next Hop
+                    </th>
+                    <th style={{ border: "1px solid #ccc", padding: 5 }}>
+                      State
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(table).map(([dest, entry]) => (
+                    <tr key={dest}>
+                      <td style={{ border: "1px solid #ccc", padding: 5 }}>
+                        {dest}
+                      </td>
+                      <td style={{ border: "1px solid #ccc", padding: 5 }}>
+                        {entry.cost === Infinity ? "∞" : entry.cost}
+                      </td>
+                      <td style={{ border: "1px solid #ccc", padding: 5 }}>
+                        {entry.nextHop}
+                      </td>
+                      <td style={{ border: "1px solid #ccc", padding: 5 }}>
+                        {entry.state}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
