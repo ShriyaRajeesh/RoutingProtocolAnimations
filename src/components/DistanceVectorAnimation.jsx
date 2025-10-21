@@ -1,15 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
-import * as d3 from "d3";
-import Papa from "papaparse";
+import React, { useState, useRef, useEffect } from 'react';
+import * as d3 from 'd3';
+import Papa from 'papaparse';
 
 export default function DistanceVectorAnimation() {
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
   const [routingTables, setRoutingTables] = useState({});
   const [changedEntries, setChangedEntries] = useState({});
-  const [source, setSource] = useState("");
-  const [target, setTarget] = useState("");
-  const [localRouter, setLocalRouter] = useState("");
+  const [localRouter, setLocalRouter] = useState('');
   const [roundCount, setRoundCount] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const svgRef = useRef();
@@ -23,38 +21,44 @@ export default function DistanceVectorAnimation() {
     setNodes([]);
     setLinks([]);
     setRoutingTables({});
-    setLocalRouter("");
+    setLocalRouter('');
     setRoundCount(0);
+
     const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
+    svg.selectAll('*').remove();
   };
 
-  const getLinkId = (end) => (typeof end === "string" ? end : end.id);
+  const getLinkId = (end) => (typeof end === 'string' ? end : end.id);
 
-  const handleCSVUpload = (e) => {
-    const file = e.target.files[0];
+  const handleCSVUpload = (event) => {
+    const file = event.target.files[0];
     if (!file) return;
+
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
         const data = results.data;
-        const newNodes = new Set(nodes.map((n) => n.id));
+        const nodeSet = new Set(nodes.map((n) => n.id));
         const newLinks = [...links];
+
         data.forEach((row) => {
-          const s = row.source?.toString().trim();
-          const t = row.target?.toString().trim();
-          if (!s || !t || s === t) return;
-          if (!newNodes.has(s)) newNodes.add(s);
-          if (!newNodes.has(t)) newNodes.add(t);
-          const exists = newLinks.find(
-            (l) =>
-              (l.source === s && l.target === t) ||
-              (l.source === t && l.target === s)
+          const sourceId = row.source?.toString().trim();
+          const targetId = row.target?.toString().trim();
+          if (!sourceId || !targetId || sourceId === targetId) return;
+
+          if (!nodeSet.has(sourceId)) nodeSet.add(sourceId);
+          if (!nodeSet.has(targetId)) nodeSet.add(targetId);
+
+          const exists = newLinks.some(
+            (link) =>
+              (link.source === sourceId && link.target === targetId) ||
+              (link.source === targetId && link.target === sourceId),
           );
-          if (!exists) newLinks.push({ source: s, target: t });
+          if (!exists) newLinks.push({ source: sourceId, target: targetId });
         });
-        setNodes([...Array.from(newNodes)].map((id) => ({ id })));
+
+        setNodes([...Array.from(nodeSet)].map((id) => ({ id })));
         setLinks(newLinks);
       },
     });
@@ -62,23 +66,26 @@ export default function DistanceVectorAnimation() {
 
   const downloadCSV = () => {
     if (!Object.keys(routingTables).length) return;
-    let allData = [];
+
+    const allData = [];
+
     Object.entries(routingTables).forEach(([router, table]) => {
       Object.entries(table).forEach(([dest, entry]) => {
         allData.push({
           router,
           destination: dest,
-          cost: entry.cost === Infinity ? "∞" : entry.cost,
+          cost: entry.cost === Infinity ? '∞' : entry.cost,
           nextHop: entry.nextHop,
-          state: entry.state || "valid",
+          state: entry.state || 'valid',
         });
       });
     });
+
     const csv = Papa.unparse(allData);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "distance_vector_routing.csv";
+    link.download = 'distance_vector_routing.csv';
     link.click();
   };
 
@@ -87,15 +94,14 @@ export default function DistanceVectorAnimation() {
   const getNeighborsOf = (nodeId) =>
     links
       .filter(
-        (l) => getLinkId(l.source) === nodeId || getLinkId(l.target) === nodeId
+        (link) =>
+          getLinkId(link.source) === nodeId || getLinkId(link.target) === nodeId,
       )
-      .map((l) =>
-        getLinkId(l.source) === nodeId
-          ? getLinkId(l.target)
-          : getLinkId(l.source)
+      .map((link) =>
+        getLinkId(link.source) === nodeId ? getLinkId(link.target) : getLinkId(link.source),
       );
 
-  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const performOneRoundWithDiff = (tablesIn) => {
     const updatedTables = JSON.parse(JSON.stringify(tablesIn));
@@ -109,6 +115,7 @@ export default function DistanceVectorAnimation() {
 
       neighbors.forEach((neighborId) => {
         const advertised = {};
+
         Object.keys(nodeTable).forEach((dest) => {
           const entry = nodeTable[dest];
           advertised[dest] = {
@@ -121,26 +128,25 @@ export default function DistanceVectorAnimation() {
 
         Object.keys(advertised).forEach((dest) => {
           const advCost = advertised[dest].cost;
-          let candidateCost =
-            advCost === Infinity ? Infinity : advCost + linkCost;
+          let candidateCost = advCost === Infinity ? Infinity : advCost + linkCost;
           if (candidateCost > maxHop) candidateCost = Infinity;
 
           const current = neighborTable[dest] || {
             cost: Infinity,
-            nextHop: "-",
-            state: "invalid",
+            nextHop: '-',
+            state: 'invalid',
           };
 
           const isBetter =
             candidateCost < current.cost ||
             (current.cost === Infinity && candidateCost < Infinity) ||
-            (current.state === "invalid" && candidateCost < Infinity);
+            (current.state === 'invalid' && candidateCost < Infinity);
 
           if (isBetter) {
             neighborTable[dest] = {
               cost: candidateCost,
-              nextHop: candidateCost === Infinity ? "-" : nodeId,
-              state: candidateCost === Infinity ? "invalid" : "valid",
+              nextHop: candidateCost === Infinity ? '-' : nodeId,
+              state: candidateCost === Infinity ? 'invalid' : 'valid',
             };
             anyChanged = true;
             roundChanges[neighborId] = roundChanges[neighborId] || new Set();
@@ -150,8 +156,8 @@ export default function DistanceVectorAnimation() {
           if (advertised[dest].poisoned && current.nextHop === nodeId) {
             neighborTable[dest] = {
               cost: Infinity,
-              nextHop: "-",
-              state: "invalid",
+              nextHop: '-',
+              state: 'invalid',
             };
             anyChanged = true;
             roundChanges[neighborId] = roundChanges[neighborId] || new Set();
@@ -163,20 +169,22 @@ export default function DistanceVectorAnimation() {
       });
     });
 
-    Object.keys(updatedTables).forEach((r) => {
+    // Fill missing destinations
+    Object.keys(updatedTables).forEach((router) => {
       nodes.forEach((n) => {
-        if (!updatedTables[r][n.id])
-          updatedTables[r][n.id] = {
+        if (!updatedTables[router][n.id]) {
+          updatedTables[router][n.id] = {
             cost: Infinity,
-            nextHop: "-",
-            state: "invalid",
+            nextHop: '-',
+            state: 'invalid',
           };
+        }
       });
     });
 
     const roundChangesObj = {};
-    Object.entries(roundChanges).forEach(([r, s]) => {
-      roundChangesObj[r] = Array.from(s);
+    Object.entries(roundChanges).forEach(([router, destSet]) => {
+      roundChangesObj[router] = Array.from(destSet);
     });
 
     return {
@@ -191,33 +199,35 @@ export default function DistanceVectorAnimation() {
   /** ----------------- ANIMATION ----------------- */
 
   const animatePacketsOneRound = async (durationPerPacket = 800) => {
-    // slowed down
     const svg = d3.select(svgRef.current);
-    for (let i = 0; i < nodes.length; i++) {
+
+    for (let i = 0; i < nodes.length; i += 1) {
       const node = nodes[i];
       const neighLinks = links.filter(
-        (l) =>
-          getLinkId(l.source) === node.id || getLinkId(l.target) === node.id
+        (link) =>
+          getLinkId(link.source) === node.id || getLinkId(link.target) === node.id,
       );
-      for (let j = 0; j < neighLinks.length; j++) {
-        const d = neighLinks[j];
-        const sObj = getLinkId(d.source) === node.id ? d.source : d.target;
-        const tObj = getLinkId(d.source) === node.id ? d.target : d.source;
-        if (!sObj.x || !tObj.x) continue;
+
+      for (let j = 0; j < neighLinks.length; j += 1) {
+        const link = neighLinks[j];
+        const sourceObj = getLinkId(link.source) === node.id ? link.source : link.target;
+        const targetObj = getLinkId(link.source) === node.id ? link.target : link.source;
+
+        if (!sourceObj.x || !targetObj.x) continue;
 
         const packet = svg
-          .append("circle")
-          .attr("r", 5)
-          .attr("fill", "limegreen")
-          .attr("cx", sObj.x)
-          .attr("cy", sObj.y);
+          .append('circle')
+          .attr('r', 5)
+          .attr('fill', 'limegreen')
+          .attr('cx', sourceObj.x)
+          .attr('cy', sourceObj.y);
 
         packet
           .transition()
           .duration(durationPerPacket)
-          .attrTween("cx", () => (tt) => sObj.x + tt * (tObj.x - sObj.x))
-          .attrTween("cy", () => (tt) => sObj.y + tt * (tObj.y - sObj.y))
-          .on("end", () => packet.remove());
+          .attrTween('cx', () => (t) => sourceObj.x + t * (targetObj.x - sourceObj.x))
+          .attrTween('cy', () => (t) => sourceObj.y + t * (targetObj.y - sourceObj.y))
+          .on('end', () => packet.remove());
 
         await sleep(100);
       }
@@ -226,29 +236,27 @@ export default function DistanceVectorAnimation() {
   };
 
   const animateConverge = async () => {
-    if (!nodes.length) return alert("Add nodes/links first");
+    if (!nodes.length) return alert('Add nodes/links first');
     if (isAnimating) return;
-    setIsAnimating(true);
 
-    let tables = JSON.parse(JSON.stringify(routingTables));
+    setIsAnimating(true);
+    let tables = copyObject(routingTables);
     const maxRounds = 200;
     let round = 0;
-    while (round < maxRounds) {
-      round++;
-      await animatePacketsOneRound(600); // slowed down
-      const { updatedTables, changed, roundChanges } =
-        performOneRoundWithDiff(tables);
 
-      setChangedEntries((prev) => ({
-        ...prev,
-        [roundCount + 1]: roundChanges,
-      }));
-      setRoutingTables(JSON.parse(JSON.stringify(updatedTables)));
+    while (round < maxRounds) {
+      round += 1;
+      await animatePacketsOneRound(600);
+
+      const { updatedTables, changed, roundChanges } = performOneRoundWithDiff(tables);
+
+      setChangedEntries((prev) => ({ ...prev, [roundCount + 1]: roundChanges }));
+      setRoutingTables(copyObject(updatedTables));
       setRoundCount((c) => c + 1);
 
       await sleep(1000);
       setChangedEntries((prev) => {
-        const copy = { ...copyObject(prev) };
+        const copy = copyObject(prev);
         delete copy[roundCount + 1];
         return copy;
       });
@@ -256,98 +264,79 @@ export default function DistanceVectorAnimation() {
       tables = updatedTables;
       if (!changed) break;
     }
+
     setIsAnimating(false);
   };
 
   /** ----------------- D3 VISUALIZATION ----------------- */
   useEffect(() => {
     const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
+    svg.selectAll('*').remove();
     const width = 700;
     const height = 450;
 
-    svg
-      .append("defs")
-      .append("marker")
-      .attr("id", "arrow")
-      .attr("viewBox", "0 -5 10 10")
-      .attr("refX", 24)
-      .attr("refY", 0)
-      .attr("markerWidth", 6)
-      .attr("markerHeight", 6)
-      .attr("orient", "auto")
-      .append("path")
-      .attr("d", "M0,-5L10,0L0,5")
-      .attr("fill", "#555");
+    svg.append('defs')
+      .append('marker')
+      .attr('id', 'arrow')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 24)
+      .attr('refY', 0)
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .attr('fill', '#555');
 
-    const simulation = d3
-      .forceSimulation(nodes)
-      .force(
-        "link",
-        d3
-          .forceLink(links)
-          .id((d) => d.id)
-          .distance(140)
-      )
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2));
+    const simulation = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id((d) => d.id).distance(140))
+      .force('charge', d3.forceManyBody().strength(-300))
+      .force('center', d3.forceCenter(width / 2, height / 2));
 
-    const link = svg
-      .selectAll(".link")
-      .data(links)
-      .enter()
-      .append("line")
-      .attr("class", "link")
-      .attr("stroke", "#999")
-      .attr("stroke-width", 2)
-      .attr("marker-end", "url(#arrow)");
+    const link = svg.selectAll('.link').data(links).enter()
+      .append('line')
+      .attr('class', 'link')
+      .attr('stroke', '#999')
+      .attr('stroke-width', 2)
+      .attr('marker-end', 'url(#arrow)');
 
-    const linkLabels = svg
-      .selectAll(".link-label")
-      .data(links)
-      .enter()
-      .append("text")
-      .attr("class", "link-label")
-      .attr("font-size", "12px")
-      .attr("fill", "#000")
-      .text(() => "1");
+    const linkLabels = svg.selectAll('.link-label').data(links).enter()
+      .append('text')
+      .attr('class', 'link-label')
+      .attr('font-size', '12px')
+      .attr('fill', '#000')
+      .text(() => '1');
 
-    const node = svg
-      .selectAll("image")
-      .data(nodes)
-      .enter()
-      .append("image")
-      .attr("xlink:href", (d) => "/modem.png")
-      .attr("width", 45)
-      .attr("height", 45)
-      .attr("x", (d) => d.x - 22)
-      .attr("y", (d) => d.y - 22);
+    const nodeImages = svg.selectAll('image').data(nodes).enter()
+      .append('image')
+      .attr('xlink:href', '/modem.png')
+      .attr('width', 45)
+      .attr('height', 45)
+      .attr('x', (d) => d.x - 22)
+      .attr('y', (d) => d.y - 22);
 
-    const labels = svg
-      .selectAll(".label")
-      .data(nodes)
-      .enter()
-      .append("text")
-      .attr("class", "label")
-      .attr("text-anchor", "middle")
-      .attr("dy", 35)
-      .attr("font-size", "12px")
-      .attr("fill", "black")
+    const nodeLabels = svg.selectAll('.label').data(nodes).enter()
+      .append('text')
+      .attr('class', 'label')
+      .attr('text-anchor', 'middle')
+      .attr('dy', 35)
+      .attr('font-size', '12px')
+      .attr('fill', 'black')
       .text((d) => d.id);
 
-    simulation.on("tick", () => {
+    simulation.on('tick', () => {
       link
-        .attr("x1", (d) => d.source.x)
-        .attr("y1", (d) => d.source.y)
-        .attr("x2", (d) => d.target.x)
-        .attr("y2", (d) => d.target.y);
+        .attr('x1', (d) => d.source.x)
+        .attr('y1', (d) => d.source.y)
+        .attr('x2', (d) => d.target.x)
+        .attr('y2', (d) => d.target.y);
 
       linkLabels
-        .attr("x", (d) => (d.source.x + d.target.x) / 2)
-        .attr("y", (d) => (d.source.y + d.target.y) / 2);
+        .attr('x', (d) => (d.source.x + d.target.x) / 2)
+        .attr('y', (d) => (d.source.y + d.target.y) / 2);
 
-      node.attr("x", (d) => d.x - 22).attr("y", (d) => d.y - 22);
-      labels.attr("x", (d) => d.x).attr("y", (d) => d.y + 35);
+      nodeImages.attr('x', (d) => d.x - 22).attr('y', (d) => d.y - 22);
+      nodeLabels.attr('x', (d) => d.x).attr('y', (d) => d.y + 35);
     });
 
     return () => simulation.stop();
@@ -361,19 +350,17 @@ export default function DistanceVectorAnimation() {
       nodes.forEach((dest) => {
         newTables[node.id][dest.id] = {
           cost: node.id === dest.id ? 0 : Infinity,
-          nextHop: node.id === dest.id ? node.id : "-",
-          state: node.id === dest.id ? "valid" : "invalid",
+          nextHop: node.id === dest.id ? node.id : '-',
+          state: node.id === dest.id ? 'valid' : 'invalid',
         };
       });
     });
 
-    links.forEach((l) => {
-      const s = getLinkId(l.source);
-      const t = getLinkId(l.target);
-      if (newTables[s])
-        newTables[s][t] = { cost: linkCost, nextHop: t, state: "valid" };
-      if (newTables[t])
-        newTables[t][s] = { cost: linkCost, nextHop: s, state: "valid" };
+    links.forEach((link) => {
+      const sourceId = getLinkId(link.source);
+      const targetId = getLinkId(link.target);
+      if (newTables[sourceId]) newTables[sourceId][targetId] = { cost: linkCost, nextHop: targetId, state: 'valid' };
+      if (newTables[targetId]) newTables[targetId][sourceId] = { cost: linkCost, nextHop: sourceId, state: 'valid' };
     });
 
     setRoutingTables(newTables);
@@ -383,24 +370,25 @@ export default function DistanceVectorAnimation() {
 
   /** ----------------- UI ----------------- */
   return (
-    <div style={{ maxWidth: "1000px", margin: "auto" }}>
+    <div style={{ maxWidth: '1000px', margin: 'auto' }}>
       <h2>Distance Vector Routing — Animated Convergence</h2>
 
       <div style={{ marginBottom: 10 }}>
-        <label>Local Router ID:</label>
+        <label htmlFor="local-router">Local Router ID:</label>
         <input
+          id="local-router"
           type="text"
           value={localRouter}
           onChange={(e) => setLocalRouter(e.target.value.trim())}
           placeholder="Enter local router ID"
           style={{ marginLeft: 10 }}
         />
-        <span style={{ marginLeft: 20, fontSize: 13, color: "#555" }}>
+        <span style={{ marginLeft: 20, fontSize: 13, color: '#555' }}>
           Round: <strong>{roundCount}</strong>
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
         <input type="file" accept=".csv" onChange={handleCSVUpload} />
       </div>
 
@@ -408,13 +396,13 @@ export default function DistanceVectorAnimation() {
         ref={svgRef}
         width={820}
         height={420}
-        style={{ border: "1px solid #ccc", background: "#f8f9fa" }}
+        style={{ border: '1px solid #ccc', background: '#f8f9fa' }}
       />
 
-      <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-        <button onClick={animateConverge}>Animate Converge</button>
-        <button onClick={clearTopology}>Clear Topology</button>
-        <button onClick={downloadCSV}>Download CSV</button>
+      <div style={{ marginTop: 10, display: 'flex', gap: 10 }}>
+        <button type="button" onClick={animateConverge}>Animate Converge</button>
+        <button type="button" onClick={clearTopology}>Clear Topology</button>
+        <button type="button" onClick={downloadCSV}>Download CSV</button>
       </div>
 
       <div style={{ marginTop: 20 }}>
@@ -422,51 +410,34 @@ export default function DistanceVectorAnimation() {
         {Object.keys(routingTables).length === 0 ? (
           <p>No routing tables available.</p>
         ) : (
-          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             {Object.entries(routingTables).map(([router, table]) => (
               <table
                 key={router}
-                style={{ borderCollapse: "collapse", border: "1px solid #ccc" }}
+                style={{ borderCollapse: 'collapse', border: '1px solid #ccc' }}
               >
                 <thead>
                   <tr>
-                    <th
-                      colSpan={4}
-                      style={{ border: "1px solid #ccc", padding: 5 }}
-                    >
+                    <th colSpan={4} style={{ border: '1px solid #ccc', padding: 5 }}>
                       Router {router}
                     </th>
                   </tr>
                   <tr>
-                    <th style={{ border: "1px solid #ccc", padding: 5 }}>
-                      Destination
-                    </th>
-                    <th style={{ border: "1px solid #ccc", padding: 5 }}>
-                      Cost
-                    </th>
-                    <th style={{ border: "1px solid #ccc", padding: 5 }}>
-                      Next Hop
-                    </th>
-                    <th style={{ border: "1px solid #ccc", padding: 5 }}>
-                      State
-                    </th>
+                    <th style={{ border: '1px solid #ccc', padding: 5 }}>Destination</th>
+                    <th style={{ border: '1px solid #ccc', padding: 5 }}>Cost</th>
+                    <th style={{ border: '1px solid #ccc', padding: 5 }}>Next Hop</th>
+                    <th style={{ border: '1px solid #ccc', padding: 5 }}>State</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Object.entries(table).map(([dest, entry]) => (
                     <tr key={dest}>
-                      <td style={{ border: "1px solid #ccc", padding: 5 }}>
-                        {dest}
+                      <td style={{ border: '1px solid #ccc', padding: 5 }}>{dest}</td>
+                      <td style={{ border: '1px solid #ccc', padding: 5 }}>
+                        {entry.cost === Infinity ? '∞' : entry.cost}
                       </td>
-                      <td style={{ border: "1px solid #ccc", padding: 5 }}>
-                        {entry.cost === Infinity ? "∞" : entry.cost}
-                      </td>
-                      <td style={{ border: "1px solid #ccc", padding: 5 }}>
-                        {entry.nextHop}
-                      </td>
-                      <td style={{ border: "1px solid #ccc", padding: 5 }}>
-                        {entry.state}
-                      </td>
+                      <td style={{ border: '1px solid #ccc', padding: 5 }}>{entry.nextHop}</td>
+                      <td style={{ border: '1px solid #ccc', padding: 5 }}>{entry.state}</td>
                     </tr>
                   ))}
                 </tbody>
