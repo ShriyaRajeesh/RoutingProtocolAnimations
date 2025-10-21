@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import OSPFAnimation from "./components/OSPFAnimation";
 import DistanceVectorAnimation from "./components/DistanceVectorAnimation";
 import EIGRPAnimation from "./components/EIGRPAnimation";
+import "./App.css";
 
 
 function App() {
@@ -10,8 +11,10 @@ function App() {
     <Router>
       <div style={{ textAlign: "center", padding: "20px" }}>
         <h1>
-          SOFTWARE ENGINEERING (IT303) COURSE PROJECT TITLE: “IMPLEMENTATION OF
-          ANIMATION OF ROUTING PROTOCOLS”{" "}
+          SOFTWARE ENGINEERING (IT303) COURSE PROJECT 
+        </h1>
+        <h1>
+          TITLE: “IMPLEMENTATION OF ANIMATION OF ROUTING PROTOCOLS”{" "}
         </h1>
         <h3>carried out by</h3>
         <h2>Ashab muhammed-231IT011</h2>

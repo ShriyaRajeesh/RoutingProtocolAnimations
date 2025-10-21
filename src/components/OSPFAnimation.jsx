@@ -46,22 +46,26 @@ export default function OSPFAnimation() {
       .text((d) => d.cost);
 
     const node = svg
-      .selectAll("circle")
+      .selectAll("image")
       .data(nodes)
       .enter()
-      .append("circle")
-      .attr("r", 22)
-      .attr("fill", (d) => (d.id === localRouter ? "tomato" : "steelblue"))
-      .attr("stroke", "#222")
-      .attr("stroke-width", 1.5)
+      .append("image")
+      .attr("xlink:href", (d) =>
+        d.id === localRouter ? "/modem.png" : "/modem.png"
+      )
+      .attr("width", 45)
+      .attr("height", 45)
+      .attr("x", (d) => d.x - 22)
+      .attr("y", (d) => d.y - 22)
+      .attr("filter", (d) =>
+        d.id === localRouter ? "drop-shadow(0 0 6px tomato)" : null
+      )
       .call(
-        d3
-          .drag()
+        d3.drag()
           .on("start", dragStarted)
           .on("drag", dragged)
           .on("end", dragEnded)
       );
-
     const labels = svg
       .selectAll(".label")
       .data(nodes)
@@ -71,7 +75,7 @@ export default function OSPFAnimation() {
       .attr("text-anchor", "middle")
       .attr("dy", 5)
       .attr("font-size", "12px")
-      .attr("fill", "white")
+      .attr("fill", "black")
       .text((d) => d.id);
 
     simulation.on("tick", () => {
@@ -85,8 +89,14 @@ export default function OSPFAnimation() {
         .attr("x", (d) => (d.source.x + d.target.x) / 2)
         .attr("y", (d) => (d.source.y + d.target.y) / 2);
 
-      node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
-      labels.attr("x", (d) => d.x).attr("y", (d) => d.y + 4);
+      node
+        .attr("x", (d) => d.x - 22) // center the image
+        .attr("y", (d) => d.y - 22);
+
+      labels
+        .attr("x", (d) => d.x)
+        .attr("y", (d) => d.y + 35); // slightly below the router icon
+
     });
 
     function dragStarted(event, d) {
@@ -118,9 +128,15 @@ export default function OSPFAnimation() {
       return;
     }
     if (!nodes.find((n) => n.id === source))
-      setNodes((prev) => [...prev, { id: source }]);
+      setNodes((prev) => [
+        ...prev,
+        { id: source, x: Math.random() * 700, y: Math.random() * 450 }
+      ]);
     if (!nodes.find((n) => n.id === target))
-      setNodes((prev) => [...prev, { id: target }]);
+      setNodes((prev) => [
+        ...prev,
+        { id: target, x: Math.random() * 700, y: Math.random() * 450 }
+      ]);
 
     const existing = links.find(
       (l) =>
