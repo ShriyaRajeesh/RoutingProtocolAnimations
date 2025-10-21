@@ -1,133 +1,111 @@
-import React, { useState, useRef, useEffect } from "react";
-import * as d3 from "d3";
-import Papa from "papaparse";
+import React, { useState, useRef, useEffect } from 'react';
+import * as d3 from 'd3';
+import Papa from 'papaparse';
 
 
-/**
- * EIGRP Distance Vector Simulation with D3 Visualization
- * ------------------------------------------------------
- * Features:
- *  - Add routers and links manually or via CSV upload
- *  - Run EIGRP simulation with packet animation
- *  - Export final routing table as CSV
- *  - Clear topology for a new attempt
- */
 
 export default function EIGRPAnimation() {
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
-  const [source, setSource] = useState("");
-  const [target, setTarget] = useState("");
-  const [cost, setCost] = useState("");
-  const [localRouter, setLocalRouter] = useState("");
+  const [source, setSource] = useState('');
+  const [target, setTarget] = useState('');
+  const [cost, setCost] = useState('');
+  const [localRouter, setLocalRouter] = useState('');
   const [routingTable, setRoutingTable] = useState([]);
   const svgRef = useRef();
 
-  /**
-   * Clears the entire topology and routing table.
-   */
   const clearTopology = () => {
     setNodes([]);
     setLinks([]);
     setRoutingTable([]);
-    setLocalRouter("");
-    const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
-    console.log("Topology cleared.");
+    setLocalRouter('');
+    d3.select(svgRef.current).selectAll('*').remove();
+    console.log('Topology cleared.');
   };
 
-  /**
-   * D3 Visualization: updates whenever nodes/links change
-   */
   useEffect(() => {
     const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
+    svg.selectAll('*').remove();
 
     const width = 700;
     const height = 450;
 
     const simulation = d3
       .forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id((d) => d.id).distance(150))
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2));
+      .force('link', d3.forceLink(links).id((d) => d.id).distance(150))
+      .force('charge', d3.forceManyBody().strength(-300))
+      .force('center', d3.forceCenter(width / 2, height / 2));
 
-    // Draw links
+    
     const link = svg
-      .selectAll(".link")
+      .selectAll('.link')
       .data(links)
       .enter()
-      .append("line")
-      .attr("class", "link")
-      .attr("stroke", "#888")
-      .attr("stroke-width", 2);
+      .append('line')
+      .attr('class', 'link')
+      .attr('stroke', '#888')
+      .attr('stroke-width', 2);
 
-    // Draw link cost labels
+    
     const linkLabels = svg
-      .selectAll(".link-label")
+      .selectAll('.link-label')
       .data(links)
       .enter()
-      .append("text")
-      .attr("class", "link-label")
-      .attr("font-size", "12px")
-      .attr("fill", "#000")
+      .append('text')
+      .attr('class', 'link-label')
+      .attr('font-size', '12px')
+      .attr('fill', '#000')
       .text((d) => d.cost);
 
-    // Draw routers as circles
+    
     const routerNode = svg
-      .selectAll("image")
+      .selectAll('image')
       .data(nodes)
       .enter()
-      .append("image")
-      .attr("xlink:href", (d) =>
-        d.id === localRouter ? "/modem.png" : "/modem.png"
-      )
-      .attr("width", 45)
-      .attr("height", 45)
-      .attr("x", (d) => d.x - 22)
-      .attr("y", (d) => d.y - 22)
-      .attr("filter", (d) =>
-        d.id === localRouter ? "drop-shadow(0 0 6px tomato)" : null
-      )
+      .append('image')
+      .attr('xlink:href', '/modem.png')
+      .attr('width', 45)
+      .attr('height', 45)
+      .attr('x', (d) => d.x - 22)
+      .attr('y', (d) => d.y - 22)
+      .attr('filter', (d) => (d.id === localRouter ? 'drop-shadow(0 0 6px tomato)' : null))
       .call(
         d3
           .drag()
-          .on("start", dragStarted)
-          .on("drag", dragged)
-          .on("end", dragEnded)
+          .on('start', dragStarted)
+          .on('drag', dragged)
+          .on('end', dragEnded)
       );
 
-    // Router labels
+    
     const labels = svg
-      .selectAll(".label")
+      .selectAll('.label')
       .data(nodes)
       .enter()
-      .append("text")
-      .attr("class", "label")
-      .attr("text-anchor", "middle")
-      .attr("dy", 5)
-      .attr("font-size", "13px")
-      .attr("fill", "#fff")
+      .append('text')
+      .attr('class', 'label')
+      .attr('text-anchor', 'middle')
+      .attr('dy', 5)
+      .attr('font-size', '13px')
+      .attr('fill', '#fff')
       .text((d) => d.id);
 
-    simulation.on("tick", () => {
+    simulation.on('tick', () => {
       link
-        .attr("x1", (d) => d.source.x)
-        .attr("y1", (d) => d.source.y)
-        .attr("x2", (d) => d.target.x)
-        .attr("y2", (d) => d.target.y);
+        .attr('x1', (d) => d.source.x)
+        .attr('y1', (d) => d.source.y)
+        .attr('x2', (d) => d.target.x)
+        .attr('y2', (d) => d.target.y);
 
       linkLabels
-        .attr("x", (d) => (d.source.x + d.target.x) / 2)
-        .attr("y", (d) => (d.source.y + d.target.y) / 2);
+        .attr('x', (d) => (d.source.x + d.target.x) / 2)
+        .attr('y', (d) => (d.source.y + d.target.y) / 2);
 
       routerNode
-        .attr("x", (d) => d.x - 22) // center the image
-        .attr("y", (d) => d.y - 22);
+        .attr('x', (d) => d.x - 22)
+        .attr('y', (d) => d.y - 22);
 
-      labels
-        .attr("x", (d) => d.x)
-        .attr("y", (d) => d.y + 35); // slightly below the router icon
+      labels.attr('x', (d) => d.x).attr('y', (d) => d.y + 35);
     });
 
     function dragStarted(event, d) {
@@ -135,10 +113,12 @@ export default function EIGRPAnimation() {
       d.fx = d.x;
       d.fy = d.y;
     }
+
     function dragged(event, d) {
       d.fx = event.x;
       d.fy = event.y;
     }
+
     function dragEnded(event, d) {
       if (!event.active) simulation.alphaTarget(0);
       d.fx = null;
@@ -148,29 +128,24 @@ export default function EIGRPAnimation() {
     return () => simulation.stop();
   }, [nodes, links, localRouter]);
 
-  /**
-   * Add a new link manually between routers
-   */
   const handleAddLink = () => {
     if (!source || !target || !cost) {
-      alert("Please fill in all fields.");
-      return;
-    }
-    if (parseInt(cost) < 0) {
-      alert("Cost cannot be negative.");
+      alert('Please fill in all fields.');
       return;
     }
 
-   if (!nodes.find((n) => n.id === source))
-      setNodes((prev) => [
-        ...prev,
-        { id: source, x: Math.random() * 700, y: Math.random() * 450 }
-      ]);
-    if (!nodes.find((n) => n.id === target))
-      setNodes((prev) => [
-        ...prev,
-        { id: target, x: Math.random() * 700, y: Math.random() * 450 }
-      ]);
+    if (parseInt(cost, 10) < 0) {
+      alert('Cost cannot be negative.');
+      return;
+    }
+
+    if (!nodes.find((n) => n.id === source)) {
+      setNodes((prev) => [...prev, { id: source, x: Math.random() * 700, y: Math.random() * 450 }]);
+    }
+
+    if (!nodes.find((n) => n.id === target)) {
+      setNodes((prev) => [...prev, { id: target, x: Math.random() * 700, y: Math.random() * 450 }]);
+    }
 
     const existing = links.find(
       (l) =>
@@ -179,9 +154,7 @@ export default function EIGRPAnimation() {
     );
 
     if (existing) {
-      const confirmUpdate = window.confirm(
-        `Link between ${source} and ${target} exists. Update cost?`
-      );
+      const confirmUpdate = window.confirm(`Link between ${source} and ${target} exists. Update cost?`);
       if (!confirmUpdate) return;
       setLinks((prev) =>
         prev.map((l) =>
@@ -192,20 +165,14 @@ export default function EIGRPAnimation() {
         )
       );
     } else {
-      setLinks((prev) => [
-        ...prev,
-        { source, target, cost: parseInt(cost, 10) },
-      ]);
+      setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
     }
 
-    setSource("");
-    setTarget("");
-    setCost("");
+    setSource('');
+    setTarget('');
+    setCost('');
   };
 
-  /**
-   * Upload CSV (columns: source, target, cost)
-   */
   const handleCSVUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -218,10 +185,10 @@ export default function EIGRPAnimation() {
         const newNodes = new Set(nodes.map((n) => n.id));
         const newLinks = [...links];
 
-        data.forEach(({ source, target, cost }) => {
-          if (!newNodes.has(source)) newNodes.add(source);
-          if (!newNodes.has(target)) newNodes.add(target);
-          newLinks.push({ source, target, cost: parseInt(cost, 10) });
+        data.forEach(({ source: src, target: tgt, cost: c }) => {
+          if (!newNodes.has(src)) newNodes.add(src);
+          if (!newNodes.has(tgt)) newNodes.add(tgt);
+          newLinks.push({ source: src, target: tgt, cost: parseInt(c, 10) });
         });
 
         setNodes([...Array.from(newNodes)].map((id) => ({ id })));
@@ -230,28 +197,22 @@ export default function EIGRPAnimation() {
     });
   };
 
-  /**
-   * Export routing table as CSV
-   */
   const downloadCSV = () => {
     if (!routingTable.length) return;
     const csv = Papa.unparse(routingTable);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "routing_table.csv";
+    link.download = 'routing_table.csv';
     link.click();
   };
 
-  /**
-   * Run EIGRP Algorithm + animate packet movement
-   */
   const runEIGRP = async () => {
     const svg = d3.select(svgRef.current);
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
     if (!localRouter || !nodeMap.has(localRouter)) {
-      alert("Please enter a valid local router ID.");
+      alert('Please enter a valid local router ID.');
       return;
     }
 
@@ -272,64 +233,47 @@ export default function EIGRPAnimation() {
     while (updated) {
       updated = false;
       for (const router of nodes) {
-        for (const link of links.filter(
+        const connectedLinks = links.filter(
           (l) => l.source.id === router.id || l.target.id === router.id
-        )) {
-          const neighborId =
-            link.source.id === router.id ? link.target.id : link.source.id;
+        );
+
+        for (const link of connectedLinks) {
+          const neighborId = link.source.id === router.id ? link.target.id : link.source.id;
 
           for (const dest of nodes) {
             if (router.id === dest.id) continue;
 
-            const newCost =
-              distTable[router.id][neighborId] +
-              distTable[neighborId][dest.id];
+            const newCost = distTable[router.id][neighborId] + distTable[neighborId][dest.id];
 
             if (newCost < distTable[router.id][dest.id]) {
               distTable[router.id][dest.id] = newCost;
               updated = true;
 
-              // Animate packet between routers
+              
               const current = nodeMap.get(router.id);
               const neighbor = nodeMap.get(neighborId);
-              const packet = svg
-                .append("circle")
-                .attr("r", 6)
-                .attr("fill", "orange")
-                .attr("cx", current.x)
-                .attr("cy", current.y);
+              const packet = svg.append('circle').attr('r', 6).attr('fill', 'orange').attr('cx', current.x).attr('cy', current.y);
 
-              packet
-                .transition()
-                .duration(600)
-                .attr("cx", neighbor.x)
-                .attr("cy", neighbor.y)
-                .on("end", () => packet.remove());
+              packet.transition().duration(600).attr('cx', neighbor.x).attr('cy', neighbor.y).on('end', () => packet.remove());
             }
           }
         }
       }
+      
       await new Promise((r) => setTimeout(r, 700));
     }
 
-    // Build routing table for local router
+   
     const tableData = [];
     nodes.forEach((n) => {
       if (n.id === localRouter) return;
       const minCost = distTable[localRouter][n.id];
-      let nextHop = "-";
+      let nextHop = '-';
 
-      for (const link of links.filter(
-        (l) => l.source.id === localRouter || l.target.id === localRouter
-      )) {
-        const neighborId =
-          link.source.id === localRouter ? link.target.id : link.source.id;
-
-        if (
-          distTable[localRouter][neighborId] +
-            distTable[neighborId][n.id] ===
-          minCost
-        ) {
+      const connectedLinks = links.filter((l) => l.source.id === localRouter || l.target.id === localRouter);
+      for (const link of connectedLinks) {
+        const neighborId = link.source.id === localRouter ? link.target.id : link.source.id;
+        if (distTable[localRouter][neighborId] + distTable[neighborId][n.id] === minCost) {
           nextHop = neighborId;
           break;
         }
@@ -337,7 +281,7 @@ export default function EIGRPAnimation() {
 
       tableData.push({
         destination: n.id,
-        cost: minCost === Infinity ? "∞" : minCost,
+        cost: minCost === Infinity ? '∞' : minCost,
         nextHop,
       });
     });
@@ -346,18 +290,9 @@ export default function EIGRPAnimation() {
   };
 
   return (
-    <div
-      style={{
-        maxWidth: "900px",
-        margin: "auto",
-        fontFamily: "Inter, sans-serif",
-      }}
-    >
-      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-         EIGRP Distance Vector Simulation
-      </h2>
+    <div style={{ maxWidth: '900px', margin: 'auto', fontFamily: 'Inter, sans-serif' }}>
+      <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>EIGRP Distance Vector Simulation</h2>
 
-      {/* Local Router Input */}
       <div style={{ marginBottom: 10 }}>
         <label>Local Router ID: </label>
         <input
@@ -369,107 +304,47 @@ export default function EIGRPAnimation() {
         />
       </div>
 
-      {/* Add Link Section */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-        <input
-          type="text"
-          placeholder="Router A"
-          value={source}
-          onChange={(e) => setSource(e.target.value.trim())}
-        />
-        <input
-          type="text"
-          placeholder="Router B"
-          value={target}
-          onChange={(e) => setTarget(e.target.value.trim())}
-        />
-        <input
-          type="number"
-          placeholder="Cost"
-          value={cost}
-          onChange={(e) => setCost(e.target.value)}
-        />
-        <button onClick={handleAddLink}>Add Link</button>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+        <input type="text" placeholder="Router A" value={source} onChange={(e) => setSource(e.target.value.trim())} />
+        <input type="text" placeholder="Router B" value={target} onChange={(e) => setTarget(e.target.value.trim())} />
+        <input type="number" placeholder="Cost" value={cost} onChange={(e) => setCost(e.target.value)} />
+        <button type="button" onClick={handleAddLink}>Add Link</button>
       </div>
 
-      {/* CSV Upload */}
       <div style={{ marginBottom: 10 }}>
         <input type="file" accept=".csv" onChange={handleCSVUpload} />
       </div>
 
-      {/* Graph Canvas */}
       <svg
         ref={svgRef}
         width={700}
         height={450}
-        style={{
-          border: "1px solid #ccc",
-          background: "#f8f9fa",
-          borderRadius: "8px",
-        }}
+        style={{ border: '1px solid #ccc', background: '#f8f9fa', borderRadius: '8px' }}
       />
 
-      {/* Controls */}
       <div style={{ marginTop: 20 }}>
-        <button onClick={runEIGRP} style={{ padding: "10px 15px" }}>
-           Run EIGRP
-        </button>
-        <button
-          onClick={downloadCSV}
-          style={{ padding: "10px 15px", marginLeft: 10 }}
-        >
-           Download Routing Table
-        </button>
-        <button
-          onClick={clearTopology}
-          style={{
-            padding: "10px 15px",
-            marginLeft: 10,
-            background: "#e74c3c",
-            color: "white",
-          }}
-        >
-           Clear Topology
-        </button>
+        <button type="button" onClick={runEIGRP} style={{ padding: '10px 15px' }}>Run EIGRP</button>
+        <button type="button" onClick={downloadCSV} style={{ padding: '10px 15px', marginLeft: 10 }}>Download Routing Table</button>
+        <button type="button" onClick={clearTopology} style={{ padding: '10px 15px', marginLeft: 10, background: '#e74c3c', color: 'white' }}>Clear Topology</button>
       </div>
 
-      {/* Routing Table */}
       {routingTable.length > 0 && (
         <div style={{ marginTop: 30 }}>
           <h3>Final Routing Table</h3>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              textAlign: "center",
-              background: "#f9f9f9",
-            }}
-          >
-            <thead style={{ background: "#444", color: "white" }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', background: '#f9f9f9' }}>
+            <thead style={{ background: '#444', color: 'white' }}>
               <tr>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
-                  Destination
-                </th>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
-                  Cost
-                </th>
-                <th style={{ padding: "8px", border: "1px solid #ccc" }}>
-                  Next Hop
-                </th>
+                <th style={{ padding: '8px', border: '1px solid #ccc' }}>Destination</th>
+                <th style={{ padding: '8px', border: '1px solid #ccc' }}>Cost</th>
+                <th style={{ padding: '8px', border: '1px solid #ccc' }}>Next Hop</th>
               </tr>
             </thead>
             <tbody>
               {routingTable.map((row, i) => (
                 <tr key={i}>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
-                    {row.destination}
-                  </td>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
-                    {row.cost}
-                  </td>
-                  <td style={{ padding: "8px", border: "1px solid #ccc" }}>
-                    {row.nextHop}
-                  </td>
+                  <td style={{ padding: '8px', border: '1px solid #ccc' }}>{row.destination}</td>
+                  <td style={{ padding: '8px', border: '1px solid #ccc' }}>{row.cost}</td>
+                  <td style={{ padding: '8px', border: '1px solid #ccc' }}>{row.nextHop}</td>
                 </tr>
               ))}
             </tbody>

@@ -43,7 +43,7 @@ export default function DistanceVectorAnimation() {
     if (!source || !target) return alert("Fill source and target");
     if (source === target) return alert("Source and target must differ");
 
-    // Add new nodes if they don't exist
+    
     if (!nodes.find((n) => n.id === source))
       setNodes((prev) => [
         ...prev,
