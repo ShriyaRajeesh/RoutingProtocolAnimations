@@ -11,10 +11,9 @@ export default function OSPFAnimation() {
   const [localRouter, setLocalRouter] = useState('');
   const [routingTable, setRoutingTable] = useState([]);
   const svgRef = useRef();
-
   const fileInputRef = useRef(null);
-  
-    const clearTopology = () => {
+
+  const clearTopology = () => {
     setNodes([]);
     setLinks([]);
     setRoutingTable([]);
@@ -30,6 +29,7 @@ export default function OSPFAnimation() {
   
     console.log('Topology cleared.');
   };
+
   // D3 Visualization
   useEffect(() => {
     const svg = d3.select(svgRef.current);
@@ -179,7 +179,76 @@ export default function OSPFAnimation() {
     setCost('');
   };
 
-  
+  const handleCSVUpload = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: results => {
+      const data = results.data;
+      const errors = [];
+      const validLinks = [];
+      const nodeSet = new Set(nodes.map(n => n.id));
+
+      
+      const headers = results.meta.fields.map(h => h.toLowerCase());
+      if (!headers.includes('source') || !headers.includes('target') || !headers.includes('cost')) {
+        alert('Invalid CSV format. Must contain "source", "target", and "cost" columns.');
+        return;
+      }
+
+      data.forEach((row, index) => {
+        const src = row.source?.trim();
+        const tgt = row.target?.trim();
+        const costVal = parseInt(row.cost, 10);
+
+        
+        if (!src || !tgt || isNaN(costVal)) {
+          errors.push(`Row ${index + 1}: Missing or invalid values.`);
+          return;
+        }
+
+        if (src === tgt) {
+          errors.push(`Row ${index + 1}: Self-loop detected (${src}).`);
+          return;
+        }
+
+        if (costVal < 0) {
+          errors.push(`Row ${index + 1}: Negative cost (${costVal}).`);
+          return;
+        }
+
+        const duplicate = validLinks.some(
+          l =>
+            (l.source === src && l.target === tgt) ||
+            (l.source === tgt && l.target === src)
+        );
+        if (duplicate) {
+          errors.push(`Row ${index + 1}: Duplicate link (${src}-${tgt}).`);
+          return;
+        }
+
+       
+        validLinks.push({ source: src, target: tgt, cost: costVal });
+        nodeSet.add(src);
+        nodeSet.add(tgt);
+      });
+
+      if (errors.length > 0) {
+        alert(`CSV Import completed with warnings:\n\n${errors.join('\n')}`);
+      }
+
+      setNodes(Array.from(nodeSet).map(id => ({ id, x: Math.random() * 700, y: Math.random() * 450 })));
+      setLinks(prev => [...prev, ...validLinks]);
+    },
+    error: err => {
+      alert(`Error parsing CSV: ${err.message}`);
+    },
+  });
+};
+
 
   const downloadCSV = () => {
     if (!routingTable.length) return;
@@ -189,62 +258,6 @@ export default function OSPFAnimation() {
     link.href = URL.createObjectURL(blob);
     link.download = 'routing_table.csv';
     link.click();
-  };
-  const handleCSVUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-  
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const data = results.data;
-        const newNodes = new Set(nodes.map((n) => n.id));
-        const newLinks = [...links];
-        const errors = [];
-  
-        data.forEach((row, index) => {
-          const src = row.source?.trim();
-          const tgt = row.target?.trim();
-          const c = parseInt(row.cost, 10);
-  
-          
-          if (!src || !tgt || isNaN(c)) {
-            errors.push(` Row ${index + 2}: Missing or invalid fields.`);
-            return;
-          }
-          if (src === tgt) {
-            errors.push(` Row ${index + 2}: Source and target cannot be the same (${src}).`);
-            return;
-          }
-          if (c < 0) {
-            errors.push(` Row ${index + 2}: Cost cannot be negative (${c}).`);
-            return;
-          }
-  
-          
-          const duplicate = newLinks.find(
-            (l) =>
-              (l.source === src && l.target === tgt) ||
-              (l.source === tgt && l.target === src)
-          );
-          if (duplicate) {
-            errors.push(` Row ${index + 2}: Duplicate link between ${src} and ${tgt}.`);
-            return;
-          }
-        });
-
-        if (errors.length > 0) {
-          alert(`CSV upload failed with the following errors:\n\n${errors.join('\n')}`);
-          console.warn("Invalid CSV entries:", errors);
-          return;
-        }
-
-        setNodes([...Array.from(newNodes)].map((id) => ({ id })));
-        setLinks(newLinks);
-        alert(" CSV uploaded successfully!");
-      },
-    });
   };
 
   const runOSPF = async () => {
@@ -388,7 +401,7 @@ export default function OSPFAnimation() {
         />
       </div>
 
-      <div style={{ display: 'flex' , gap: 10, marginBottom: 10 , justifyContent: 'center',     alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
         <input
           type="text"
           placeholder="Router A"
@@ -412,7 +425,6 @@ export default function OSPFAnimation() {
 
       <div style={{ marginBottom: 10 }}>
         <input type="file" accept=".csv" onChange={handleCSVUpload} ref={fileInputRef} />
-
       </div>
 
       <svg ref={svgRef} width={700} height={450} style={{ border: '1px solid #ccc', background: '#f8f9fa' }} />
