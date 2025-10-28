@@ -1,8 +1,17 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import Papa from "papaparse";
 
-export default function DistanceVectorAnimation() {
+const MAX_HOP = 15;
+const LINK_COST = 1;
+const SVG_WIDTH = 700;
+const SVG_HEIGHT = 450;
+
+const getLinkId = (end) => (typeof end === "string" ? end : end.id);
+
+const copyObject = (obj) => JSON.parse(JSON.stringify(obj));
+
+const DistanceVectorAnimation = () => {
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
   const [routingTables, setRoutingTables] = useState({});
@@ -12,10 +21,7 @@ export default function DistanceVectorAnimation() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [source, setSource] = useState("");
   const [target, setTarget] = useState("");
-  const svgRef = useRef();
-
-  const maxHop = 15;
-  const linkCost = 1; 
+  const svgRef = useRef(null);
 
   /** ----------------- TOPOLOGY FUNCTIONS ----------------- */
   const clearTopology = () => {
@@ -24,14 +30,13 @@ export default function DistanceVectorAnimation() {
     setRoutingTables({});
     setLocalRouter("");
     setRoundCount(0);
+
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
   };
 
-  const getLinkId = (end) => (typeof end === "string" ? end : end.id);
-
   const handleCSVUpload = (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
     Papa.parse(file, {
@@ -45,10 +50,11 @@ export default function DistanceVectorAnimation() {
         data.forEach((row) => {
           const sourceId = row.source?.toString().trim();
           const targetId = row.target?.toString().trim();
+
           if (!sourceId || !targetId || sourceId === targetId) return;
 
-          if (!nodeSet.has(sourceId)) nodeSet.add(sourceId);
-          if (!nodeSet.has(targetId)) nodeSet.add(targetId);
+          nodeSet.add(sourceId);
+          nodeSet.add(targetId);
 
           const exists = newLinks.some(
             (link) =>
@@ -57,16 +63,20 @@ export default function DistanceVectorAnimation() {
               (getLinkId(link.source) === targetId &&
                 getLinkId(link.target) === sourceId)
           );
-          if (!exists) newLinks.push({ source: sourceId, target: targetId });
+
+          if (!exists) {
+            newLinks.push({ source: sourceId, target: targetId });
+          }
         });
 
         setNodes(
-          [...Array.from(nodeSet)].map((id) => ({
+          Array.from(nodeSet).map((id) => ({
             id,
-            x: Math.random() * 700,
-            y: Math.random() * 450,
+            x: Math.random() * SVG_WIDTH,
+            y: Math.random() * SVG_HEIGHT,
           }))
         );
+
         setLinks(newLinks);
       },
     });
@@ -74,25 +84,34 @@ export default function DistanceVectorAnimation() {
 
   const handleAddLink = () => {
     if (!source || !target) {
-      alert("Please fill in source and target.");
+      window.alert("Please fill in source and target.");
       return;
     }
+
     if (source === target) {
-      alert("Source and target cannot be same.");
+      window.alert("Source and target cannot be same.");
       return;
     }
 
     if (!nodes.find((n) => n.id === source)) {
       setNodes((prev) => [
         ...prev,
-        { id: source, x: Math.random() * 700, y: Math.random() * 450 },
+        {
+          id: source,
+          x: Math.random() * SVG_WIDTH,
+          y: Math.random() * SVG_HEIGHT,
+        },
       ]);
     }
 
     if (!nodes.find((n) => n.id === target)) {
       setNodes((prev) => [
         ...prev,
-        { id: target, x: Math.random() * 700, y: Math.random() * 450 },
+        {
+          id: target,
+          x: Math.random() * SVG_WIDTH,
+          y: Math.random() * SVG_HEIGHT,
+        },
       ]);
     }
 
@@ -156,7 +175,7 @@ export default function DistanceVectorAnimation() {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const performOneRoundWithDiff = (tablesIn) => {
-    const updatedTables = JSON.parse(JSON.stringify(tablesIn));
+    const updatedTables = copyObject(tablesIn);
     let anyChanged = false;
     const roundChanges = {};
 
@@ -168,10 +187,9 @@ export default function DistanceVectorAnimation() {
       neighbors.forEach((neighborId) => {
         const advertised = {};
 
-        // node advertises its table to neighbor
+        // node advertises its table to neighbor (with split horizon + poisoned reverse)
         Object.keys(nodeTable).forEach((dest) => {
           const entry = nodeTable[dest];
-          // split horizon with poisoned reverse
           advertised[dest] = {
             cost: entry.nextHop === neighborId ? Infinity : entry.cost,
             poisoned: entry.nextHop === neighborId,
@@ -183,8 +201,9 @@ export default function DistanceVectorAnimation() {
         Object.keys(advertised).forEach((dest) => {
           const advCost = advertised[dest].cost;
           let candidateCost =
-            advCost === Infinity ? Infinity : advCost + linkCost;
-          if (candidateCost > maxHop) candidateCost = Infinity;
+            advCost === Infinity ? Infinity : advCost + LINK_COST;
+
+          if (candidateCost > MAX_HOP) candidateCost = Infinity;
 
           const current = neighborTable[dest] || {
             cost: Infinity,
@@ -249,8 +268,6 @@ export default function DistanceVectorAnimation() {
     };
   };
 
-  const copyObject = (obj) => JSON.parse(JSON.stringify(obj));
-
   /** ----------------- ANIMATION ----------------- */
   const animatePacketsOneRound = async (durationPerPacket = 700) => {
     const svg = d3.select(svgRef.current);
@@ -294,12 +311,17 @@ export default function DistanceVectorAnimation() {
 
         await sleep(100);
       }
+
       await sleep(50);
     }
   };
 
   const animateConverge = async () => {
-    if (!nodes.length) return alert("Add nodes/links first");
+    if (!nodes.length) {
+      window.alert("Add nodes/links first");
+      return;
+    }
+
     if (isAnimating) return;
 
     setIsAnimating(true);
@@ -318,10 +340,12 @@ export default function DistanceVectorAnimation() {
         ...prev,
         [roundCount + 1]: roundChanges,
       }));
+
       setRoutingTables(copyObject(updatedTables));
       setRoundCount((c) => c + 1);
 
       await sleep(1000);
+
       setChangedEntries((prev) => {
         const copy = copyObject(prev);
         delete copy[roundCount + 1];
@@ -339,8 +363,6 @@ export default function DistanceVectorAnimation() {
   useEffect(() => {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
-    const width = 700;
-    const height = 450;
 
     svg
       .append("defs")
@@ -366,7 +388,7 @@ export default function DistanceVectorAnimation() {
           .distance(140)
       )
       .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2));
+      .force("center", d3.forceCenter(SVG_WIDTH / 2, SVG_HEIGHT / 2));
 
     const link = svg
       .selectAll(".link")
@@ -432,6 +454,7 @@ export default function DistanceVectorAnimation() {
   /** ----------------- ROUTING TABLE INIT ----------------- */
   useEffect(() => {
     const newTables = {};
+
     nodes.forEach((node) => {
       newTables[node.id] = {};
       nodes.forEach((dest) => {
@@ -446,18 +469,22 @@ export default function DistanceVectorAnimation() {
     links.forEach((link) => {
       const sourceId = getLinkId(link.source);
       const targetId = getLinkId(link.target);
-      if (newTables[sourceId])
+
+      if (newTables[sourceId]) {
         newTables[sourceId][targetId] = {
-          cost: linkCost,
+          cost: LINK_COST,
           nextHop: targetId,
           state: "valid",
         };
-      if (newTables[targetId])
+      }
+
+      if (newTables[targetId]) {
         newTables[targetId][sourceId] = {
-          cost: linkCost,
+          cost: LINK_COST,
           nextHop: sourceId,
           state: "valid",
         };
+      }
     });
 
     setRoutingTables(newTables);
@@ -468,7 +495,7 @@ export default function DistanceVectorAnimation() {
   /** ----------------- UI ----------------- */
   return (
     <div style={{ maxWidth: "900px", margin: "auto" }}>
-      <h2>RIP / Distance Vector </h2>
+      <h2>RIP / Distance Vector</h2>
 
       <div style={{ marginBottom: 10 }}>
         <label>Local Router ID:</label>
@@ -484,7 +511,15 @@ export default function DistanceVectorAnimation() {
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 10 ,justifyContent: 'center',  alignItems: 'center' }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          marginBottom: 10,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
         <input
           type="text"
           placeholder="Router A"
@@ -497,7 +532,9 @@ export default function DistanceVectorAnimation() {
           value={target}
           onChange={(e) => setTarget(e.target.value.trim())}
         />
-        <button onClick={handleAddLink}>Add Link</button>
+        <button type="button" onClick={handleAddLink}>
+          Add Link
+        </button>
       </div>
 
       <div style={{ marginBottom: 10 }}>
@@ -506,22 +543,28 @@ export default function DistanceVectorAnimation() {
 
       <svg
         ref={svgRef}
-        width={700}
-        height={450}
+        width={SVG_WIDTH}
+        height={SVG_HEIGHT}
         style={{ border: "1px solid #ccc", background: "#f8f9fa" }}
       />
 
       <div style={{ marginTop: 20 }}>
-        <button onClick={animateConverge} style={{ padding: "10px 15px" }}>
-          Run Distance Vector 
+        <button
+          type="button"
+          onClick={animateConverge}
+          style={{ padding: "10px 15px" }}
+        >
+          Run Distance Vector
         </button>
         <button
+          type="button"
           onClick={downloadCSV}
           style={{ padding: "10px 15px", marginLeft: 10 }}
         >
           Download CSV
         </button>
         <button
+          type="button"
           onClick={clearTopology}
           style={{ padding: "10px 15px", marginLeft: 10 }}
         >
@@ -589,4 +632,6 @@ export default function DistanceVectorAnimation() {
       </div>
     </div>
   );
-}
+};
+
+export default DistanceVectorAnimation;
