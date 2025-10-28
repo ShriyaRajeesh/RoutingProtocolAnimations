@@ -388,7 +388,7 @@ export default function OSPFAnimation() {
         />
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+      <div style={{ display: 'flex' , gap: 10, marginBottom: 10 , justifyContent: 'center',     alignItems: 'center' }}>
         <input
           type="text"
           placeholder="Router A"

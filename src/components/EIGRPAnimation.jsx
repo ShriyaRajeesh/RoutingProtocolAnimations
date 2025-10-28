@@ -389,7 +389,7 @@ export default function EIGRPAnimation() {
 
   return (
     <div style={{ maxWidth: '900px', margin: 'auto', fontFamily: 'Inter, sans-serif' }}>
-      <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>EIGRP Distance Vector Simulation</h2>
+      <h2 style={{  alignItems: 'center', gap: 8 }}>EIGRP Visualization</h2>
 
       <div style={{ marginBottom: 10 }}>
         <label>Local Router ID: </label>
@@ -402,7 +402,7 @@ export default function EIGRPAnimation() {
         />
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10 , justifyContent: 'center',    alignItems: 'center'}}>
         <input type="text" placeholder="Router A" value={source} onChange={(e) => setSource(e.target.value.trim())} />
         <input type="text" placeholder="Router B" value={target} onChange={(e) => setTarget(e.target.value.trim())} />
         <input type="number" placeholder="Cost" value={cost} onChange={(e) => setCost(e.target.value)} />
@@ -424,7 +424,7 @@ export default function EIGRPAnimation() {
       <div style={{ marginTop: 20 }}>
         <button type="button" onClick={runEIGRP} style={{ padding: '10px 15px' }}>Run EIGRP</button>
         <button type="button" onClick={downloadCSV} style={{ padding: '10px 15px', marginLeft: 10 }}>Download Routing Table</button>
-        <button type="button" onClick={clearTopology} style={{ padding: '10px 15px', marginLeft: 10, background: '#e74c3c', color: 'white' }}>Clear Topology</button>
+        <button type="button" onClick={clearTopology} style={{ padding: '10px 15px', marginLeft: 10 }}>Clear Topology</button>
       </div>
 
       {routingTable.length > 0 && (
