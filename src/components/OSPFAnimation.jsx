@@ -179,30 +179,7 @@ export default function OSPFAnimation() {
     setCost('');
   };
 
-  const handleCSVUpload = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: results => {
-        const data = results.data;
-        const newNodes = new Set(nodes.map(n => n.id));
-        const newLinks = [...links];
-
-        data.forEach(row => {
-          const { source: src, target: tgt, cost: c } = row;
-          if (!newNodes.has(src)) newNodes.add(src);
-          if (!newNodes.has(tgt)) newNodes.add(tgt);
-          newLinks.push({ source: src, target: tgt, cost: parseInt(c, 10) });
-        });
-
-        setNodes([...Array.from(newNodes)].map(id => ({ id })));
-        setLinks(newLinks);
-      },
-    });
-  };
+  
 
   const downloadCSV = () => {
     if (!routingTable.length) return;
@@ -212,6 +189,62 @@ export default function OSPFAnimation() {
     link.href = URL.createObjectURL(blob);
     link.download = 'routing_table.csv';
     link.click();
+  };
+  const handleCSVUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+  
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const data = results.data;
+        const newNodes = new Set(nodes.map((n) => n.id));
+        const newLinks = [...links];
+        const errors = [];
+  
+        data.forEach((row, index) => {
+          const src = row.source?.trim();
+          const tgt = row.target?.trim();
+          const c = parseInt(row.cost, 10);
+  
+          
+          if (!src || !tgt || isNaN(c)) {
+            errors.push(` Row ${index + 2}: Missing or invalid fields.`);
+            return;
+          }
+          if (src === tgt) {
+            errors.push(` Row ${index + 2}: Source and target cannot be the same (${src}).`);
+            return;
+          }
+          if (c < 0) {
+            errors.push(` Row ${index + 2}: Cost cannot be negative (${c}).`);
+            return;
+          }
+  
+          
+          const duplicate = newLinks.find(
+            (l) =>
+              (l.source === src && l.target === tgt) ||
+              (l.source === tgt && l.target === src)
+          );
+          if (duplicate) {
+            errors.push(` Row ${index + 2}: Duplicate link between ${src} and ${tgt}.`);
+            return;
+          }
+        });
+
+        if (errors.length > 0) {
+          alert(`CSV upload failed with the following errors:\n\n${errors.join('\n')}`);
+          console.warn("Invalid CSV entries:", errors);
+          return;
+        }
+
+        setNodes([...Array.from(newNodes)].map((id) => ({ id })));
+        setLinks(newLinks);
+        alert(" CSV uploaded successfully!");
+      },
+    });
   };
 
   const runOSPF = async () => {

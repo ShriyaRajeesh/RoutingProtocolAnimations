@@ -184,28 +184,67 @@ export default function EIGRPAnimation() {
   };
 
   const handleCSVUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const file = e.target.files[0];
+  if (!file) return;
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const data = results.data;
-        const newNodes = new Set(nodes.map((n) => n.id));
-        const newLinks = [...links];
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      const data = results.data;
+      const newNodes = new Set(nodes.map((n) => n.id));
+      const newLinks = [...links];
+      const errors = [];
 
-        data.forEach(({ source: src, target: tgt, cost: c }) => {
-          if (!newNodes.has(src)) newNodes.add(src);
-          if (!newNodes.has(tgt)) newNodes.add(tgt);
-          newLinks.push({ source: src, target: tgt, cost: parseInt(c, 10) });
-        });
+      data.forEach((row, index) => {
+        const src = row.source?.trim();
+        const tgt = row.target?.trim();
+        const c = parseInt(row.cost, 10);
 
-        setNodes([...Array.from(newNodes)].map((id) => ({ id })));
-        setLinks(newLinks);
-      },
-    });
-  };
+        
+        if (!src || !tgt || isNaN(c)) {
+          errors.push(` Row ${index + 2}: Missing or invalid fields.`);
+          return;
+        }
+        if (src === tgt) {
+          errors.push(` Row ${index + 2}: Source and target cannot be the same (${src}).`);
+          return;
+        }
+        if (c < 0) {
+          errors.push(` Row ${index + 2}: Cost cannot be negative (${c}).`);
+          return;
+        }
+
+        
+        const duplicate = newLinks.find(
+          (l) =>
+            (l.source === src && l.target === tgt) ||
+            (l.source === tgt && l.target === src)
+        );
+        if (duplicate) {
+          errors.push(` Row ${index + 2}: Duplicate link between ${src} and ${tgt}.`);
+          return;
+        }
+
+        
+        newNodes.add(src);
+        newNodes.add(tgt);
+        newLinks.push({ source: src, target: tgt, cost: c });
+      });
+
+      if (errors.length > 0) {
+        alert(`CSV upload failed with the following errors:\n\n${errors.join('\n')}`);
+        console.warn("Invalid CSV entries:", errors);
+        return;
+      }
+
+      setNodes([...Array.from(newNodes)].map((id) => ({ id })));
+      setLinks(newLinks);
+      alert(" CSV uploaded successfully!");
+    },
+  });
+};
+
 
   const downloadCSV = () => {
     if (!routingTable.length) return;
@@ -265,7 +304,7 @@ export default function EIGRPAnimation() {
             distTable[router.id][dest.id] = newCost;
             updated = true;
 
-            // 🌟 Animate packet transfer more slowly and clearly
+            
             const current = nodeMap.get(router.id);
             const neighbor = nodeMap.get(neighborId);
 
@@ -277,7 +316,7 @@ export default function EIGRPAnimation() {
               .attr('cy', current.y)
               .style('opacity', 0.9);
 
-            // Add a glowing trail for better visualization
+            
             const trail = svg
               .append('line')
               .attr('x1', current.x)
@@ -290,7 +329,7 @@ export default function EIGRPAnimation() {
 
             packet
               .transition()
-              .duration(1500) // ⏳ Slower movement (was 600)
+              .duration(1500) // 
               .ease(d3.easeSin)
               .attr('cx', neighbor.x)
               .attr('cy', neighbor.y)
@@ -305,18 +344,18 @@ export default function EIGRPAnimation() {
                   .remove();
               });
 
-            // Small pause to make it visually educational
+            
             await new Promise((r) => setTimeout(r, 1200));
           }
         }
       }
     }
 
-    // Wait a bit between iterations for clarity
+   
     await new Promise((r) => setTimeout(r, 2000));
   }
 
-  // Build and display final table
+  
   const tableData = [];
   nodes.forEach((n) => {
     if (n.id === localRouter) return;
