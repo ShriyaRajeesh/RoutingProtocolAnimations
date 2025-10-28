@@ -468,7 +468,7 @@ export default function DistanceVectorAnimation() {
   /** ----------------- UI ----------------- */
   return (
     <div style={{ maxWidth: "900px", margin: "auto" }}>
-      <h2>RIP / Distance Vector — Animated Convergence</h2>
+      <h2>RIP / Distance Vector </h2>
 
       <div style={{ marginBottom: 10 }}>
         <label>Local Router ID:</label>
@@ -484,7 +484,7 @@ export default function DistanceVectorAnimation() {
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 10 ,justifyContent: 'center',  alignItems: 'center' }}>
         <input
           type="text"
           placeholder="Router A"
@@ -513,7 +513,7 @@ export default function DistanceVectorAnimation() {
 
       <div style={{ marginTop: 20 }}>
         <button onClick={animateConverge} style={{ padding: "10px 15px" }}>
-          Animate Converge
+          Run Distance Vector 
         </button>
         <button
           onClick={downloadCSV}
