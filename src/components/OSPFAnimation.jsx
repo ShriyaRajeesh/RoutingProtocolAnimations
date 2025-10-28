@@ -12,15 +12,24 @@ export default function OSPFAnimation() {
   const [routingTable, setRoutingTable] = useState([]);
   const svgRef = useRef();
 
-  const clearTopology = () => {
+  const fileInputRef = useRef(null);
+  
+    const clearTopology = () => {
     setNodes([]);
     setLinks([]);
     setRoutingTable([]);
     setLocalRouter('');
+  
+    
     d3.select(svgRef.current).selectAll('*').remove();
+  
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  
     console.log('Topology cleared.');
   };
-
   // D3 Visualization
   useEffect(() => {
     const svg = d3.select(svgRef.current);
@@ -369,7 +378,8 @@ export default function OSPFAnimation() {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <input type="file" accept=".csv" onChange={handleCSVUpload} />
+        <input type="file" accept=".csv" onChange={handleCSVUpload} ref={fileInputRef} />
+
       </div>
 
       <svg ref={svgRef} width={700} height={450} style={{ border: '1px solid #ccc', background: '#f8f9fa' }} />

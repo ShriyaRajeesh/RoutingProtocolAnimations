@@ -13,15 +13,25 @@ export default function EIGRPAnimation() {
   const [localRouter, setLocalRouter] = useState('');
   const [routingTable, setRoutingTable] = useState([]);
   const svgRef = useRef();
+  const fileInputRef = useRef(null);
 
   const clearTopology = () => {
-    setNodes([]);
-    setLinks([]);
-    setRoutingTable([]);
-    setLocalRouter('');
-    d3.select(svgRef.current).selectAll('*').remove();
-    console.log('Topology cleared.');
-  };
+  setNodes([]);
+  setLinks([]);
+  setRoutingTable([]);
+  setLocalRouter('');
+
+  
+  d3.select(svgRef.current).selectAll('*').remove();
+
+  
+  if (fileInputRef.current) {
+    fileInputRef.current.value = '';
+  }
+
+  console.log('Topology cleared.');
+};
+
 
   useEffect(() => {
     const svg = d3.select(svgRef.current);
@@ -208,86 +218,135 @@ export default function EIGRPAnimation() {
   };
 
   const runEIGRP = async () => {
-    const svg = d3.select(svgRef.current);
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const svg = d3.select(svgRef.current);
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
-    if (!localRouter || !nodeMap.has(localRouter)) {
-      alert('Please enter a valid local router ID.');
-      return;
-    }
+  if (!localRouter || !nodeMap.has(localRouter)) {
+    alert('Please enter a valid local router ID.');
+    return;
+  }
 
-    const distTable = {};
-    nodes.forEach((n) => {
-      distTable[n.id] = {};
-      nodes.forEach((m) => {
-        distTable[n.id][m.id] = n.id === m.id ? 0 : Infinity;
-      });
+  const distTable = {};
+  nodes.forEach((n) => {
+    distTable[n.id] = {};
+    nodes.forEach((m) => {
+      distTable[n.id][m.id] = n.id === m.id ? 0 : Infinity;
     });
+  });
 
-    links.forEach((l) => {
-      distTable[l.source.id][l.target.id] = l.cost;
-      distTable[l.target.id][l.source.id] = l.cost;
-    });
+  links.forEach((l) => {
+    distTable[l.source.id][l.target.id] = l.cost;
+    distTable[l.target.id][l.source.id] = l.cost;
+  });
 
-    let updated = true;
-    while (updated) {
-      updated = false;
-      for (const router of nodes) {
-        const connectedLinks = links.filter(
-          (l) => l.source.id === router.id || l.target.id === router.id
-        );
+  let updated = true;
+  let iteration = 1;
 
-        for (const link of connectedLinks) {
-          const neighborId = link.source.id === router.id ? link.target.id : link.source.id;
+  while (updated) {
+    console.log(`🔄 EIGRP Update Round ${iteration++}`);
+    updated = false;
 
-          for (const dest of nodes) {
-            if (router.id === dest.id) continue;
+    for (const router of nodes) {
+      const connectedLinks = links.filter(
+        (l) => l.source.id === router.id || l.target.id === router.id
+      );
 
-            const newCost = distTable[router.id][neighborId] + distTable[neighborId][dest.id];
+      for (const link of connectedLinks) {
+        const neighborId =
+          link.source.id === router.id ? link.target.id : link.source.id;
 
-            if (newCost < distTable[router.id][dest.id]) {
-              distTable[router.id][dest.id] = newCost;
-              updated = true;
+        for (const dest of nodes) {
+          if (router.id === dest.id) continue;
 
-              
-              const current = nodeMap.get(router.id);
-              const neighbor = nodeMap.get(neighborId);
-              const packet = svg.append('circle').attr('r', 6).attr('fill', 'orange').attr('cx', current.x).attr('cy', current.y);
+          const newCost =
+            distTable[router.id][neighborId] + distTable[neighborId][dest.id];
 
-              packet.transition().duration(600).attr('cx', neighbor.x).attr('cy', neighbor.y).on('end', () => packet.remove());
-            }
+          if (newCost < distTable[router.id][dest.id]) {
+            distTable[router.id][dest.id] = newCost;
+            updated = true;
+
+            // 🌟 Animate packet transfer more slowly and clearly
+            const current = nodeMap.get(router.id);
+            const neighbor = nodeMap.get(neighborId);
+
+            const packet = svg
+              .append('circle')
+              .attr('r', 7)
+              .attr('fill', 'orange')
+              .attr('cx', current.x)
+              .attr('cy', current.y)
+              .style('opacity', 0.9);
+
+            // Add a glowing trail for better visualization
+            const trail = svg
+              .append('line')
+              .attr('x1', current.x)
+              .attr('y1', current.y)
+              .attr('x2', current.x)
+              .attr('y2', current.y)
+              .attr('stroke', 'orange')
+              .attr('stroke-width', 2)
+              .attr('opacity', 0.5);
+
+            packet
+              .transition()
+              .duration(1500) // ⏳ Slower movement (was 600)
+              .ease(d3.easeSin)
+              .attr('cx', neighbor.x)
+              .attr('cy', neighbor.y)
+              .on('end', () => {
+                packet.remove();
+                trail
+                  .transition()
+                  .duration(500)
+                  .attr('x2', neighbor.x)
+                  .attr('y2', neighbor.y)
+                  .style('opacity', 0)
+                  .remove();
+              });
+
+            // Small pause to make it visually educational
+            await new Promise((r) => setTimeout(r, 1200));
           }
         }
       }
-      
-      await new Promise((r) => setTimeout(r, 700));
     }
 
-   
-    const tableData = [];
-    nodes.forEach((n) => {
-      if (n.id === localRouter) return;
-      const minCost = distTable[localRouter][n.id];
-      let nextHop = '-';
+    // Wait a bit between iterations for clarity
+    await new Promise((r) => setTimeout(r, 2000));
+  }
 
-      const connectedLinks = links.filter((l) => l.source.id === localRouter || l.target.id === localRouter);
-      for (const link of connectedLinks) {
-        const neighborId = link.source.id === localRouter ? link.target.id : link.source.id;
-        if (distTable[localRouter][neighborId] + distTable[neighborId][n.id] === minCost) {
-          nextHop = neighborId;
-          break;
-        }
+  // Build and display final table
+  const tableData = [];
+  nodes.forEach((n) => {
+    if (n.id === localRouter) return;
+    const minCost = distTable[localRouter][n.id];
+    let nextHop = '-';
+
+    const connectedLinks = links.filter(
+      (l) => l.source.id === localRouter || l.target.id === localRouter
+    );
+    for (const link of connectedLinks) {
+      const neighborId =
+        link.source.id === localRouter ? link.target.id : link.source.id;
+      if (
+        distTable[localRouter][neighborId] + distTable[neighborId][n.id] ===
+        minCost
+      ) {
+        nextHop = neighborId;
+        break;
       }
+    }
 
-      tableData.push({
-        destination: n.id,
-        cost: minCost === Infinity ? '∞' : minCost,
-        nextHop,
-      });
+    tableData.push({
+      destination: n.id,
+      cost: minCost === Infinity ? '∞' : minCost,
+      nextHop,
     });
+  });
 
-    setRoutingTable(tableData);
-  };
+  setRoutingTable(tableData);
+};
 
   return (
     <div style={{ maxWidth: '900px', margin: 'auto', fontFamily: 'Inter, sans-serif' }}>
@@ -312,7 +371,8 @@ export default function EIGRPAnimation() {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <input type="file" accept=".csv" onChange={handleCSVUpload} />
+        <input type="file" accept=".csv" onChange={handleCSVUpload} ref={fileInputRef} />
+
       </div>
 
       <svg
