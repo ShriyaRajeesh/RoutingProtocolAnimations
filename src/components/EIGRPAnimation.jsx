@@ -10,7 +10,7 @@ export default function EIGRPAnimation() {
   const [cost, setCost] = useState('');
   const [localRouter, setLocalRouter] = useState('');
   const [routingTable, setRoutingTable] = useState([]);
-  const [distanceTable, setDistanceTable] = useState({}); // ✅ NEW STATE
+  const [distanceTable, setDistanceTable] = useState({}); 
   const svgRef = useRef();
   const fileInputRef = useRef(null);
 
@@ -19,7 +19,7 @@ export default function EIGRPAnimation() {
     setLinks([]);
     setRoutingTable([]);
     setLocalRouter('');
-    setDistanceTable({}); // ✅ clear distance table
+    setDistanceTable({}); 
     d3.select(svgRef.current).selectAll('*').remove();
     if (fileInputRef.current) fileInputRef.current.value = '';
     console.log('Topology cleared.');
