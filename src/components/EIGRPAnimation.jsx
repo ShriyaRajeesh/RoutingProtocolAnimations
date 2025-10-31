@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import * as d3 from 'd3';
 import Papa from 'papaparse';
 
-
-
 export default function EIGRPAnimation() {
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
@@ -12,26 +10,20 @@ export default function EIGRPAnimation() {
   const [cost, setCost] = useState('');
   const [localRouter, setLocalRouter] = useState('');
   const [routingTable, setRoutingTable] = useState([]);
+  const [distanceTable, setDistanceTable] = useState({}); // ✅ NEW STATE
   const svgRef = useRef();
   const fileInputRef = useRef(null);
 
   const clearTopology = () => {
-  setNodes([]);
-  setLinks([]);
-  setRoutingTable([]);
-  setLocalRouter('');
-
-  
-  d3.select(svgRef.current).selectAll('*').remove();
-
-  
-  if (fileInputRef.current) {
-    fileInputRef.current.value = '';
-  }
-
-  console.log('Topology cleared.');
-};
-
+    setNodes([]);
+    setLinks([]);
+    setRoutingTable([]);
+    setLocalRouter('');
+    setDistanceTable({}); // ✅ clear distance table
+    d3.select(svgRef.current).selectAll('*').remove();
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    console.log('Topology cleared.');
+  };
 
   useEffect(() => {
     const svg = d3.select(svgRef.current);
@@ -46,7 +38,6 @@ export default function EIGRPAnimation() {
       .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2));
 
-    
     const link = svg
       .selectAll('.link')
       .data(links)
@@ -56,7 +47,6 @@ export default function EIGRPAnimation() {
       .attr('stroke', '#888')
       .attr('stroke-width', 2);
 
-    
     const linkLabels = svg
       .selectAll('.link-label')
       .data(links)
@@ -67,7 +57,6 @@ export default function EIGRPAnimation() {
       .attr('fill', '#000')
       .text((d) => d.cost);
 
-    
     const routerNode = svg
       .selectAll('image')
       .data(nodes)
@@ -78,7 +67,9 @@ export default function EIGRPAnimation() {
       .attr('height', 45)
       .attr('x', (d) => d.x - 22)
       .attr('y', (d) => d.y - 22)
-      .attr('filter', (d) => (d.id === localRouter ? 'drop-shadow(0 0 6px tomato)' : null))
+      .attr('filter', (d) =>
+        d.id === localRouter ? 'drop-shadow(0 0 6px tomato)' : null
+      )
       .call(
         d3
           .drag()
@@ -87,7 +78,6 @@ export default function EIGRPAnimation() {
           .on('end', dragEnded)
       );
 
-    
     const labels = svg
       .selectAll('.label')
       .data(nodes)
@@ -111,9 +101,7 @@ export default function EIGRPAnimation() {
         .attr('x', (d) => (d.source.x + d.target.x) / 2)
         .attr('y', (d) => (d.source.y + d.target.y) / 2);
 
-      routerNode
-        .attr('x', (d) => d.x - 22)
-        .attr('y', (d) => d.y - 22);
+      routerNode.attr('x', (d) => d.x - 22).attr('y', (d) => d.y - 22);
 
       labels.attr('x', (d) => d.x).attr('y', (d) => d.y + 35);
     });
@@ -150,11 +138,17 @@ export default function EIGRPAnimation() {
     }
 
     if (!nodes.find((n) => n.id === source)) {
-      setNodes((prev) => [...prev, { id: source, x: Math.random() * 700, y: Math.random() * 450 }]);
+      setNodes((prev) => [
+        ...prev,
+        { id: source, x: Math.random() * 700, y: Math.random() * 450 },
+      ]);
     }
 
     if (!nodes.find((n) => n.id === target)) {
-      setNodes((prev) => [...prev, { id: target, x: Math.random() * 700, y: Math.random() * 450 }]);
+      setNodes((prev) => [
+        ...prev,
+        { id: target, x: Math.random() * 700, y: Math.random() * 450 },
+      ]);
     }
 
     const existing = links.find(
@@ -164,7 +158,9 @@ export default function EIGRPAnimation() {
     );
 
     if (existing) {
-      const confirmUpdate = window.confirm(`Link between ${source} and ${target} exists. Update cost?`);
+      const confirmUpdate = window.confirm(
+        `Link between ${source} and ${target} exists. Update cost?`
+      );
       if (!confirmUpdate) return;
       setLinks((prev) =>
         prev.map((l) =>
@@ -175,7 +171,10 @@ export default function EIGRPAnimation() {
         )
       );
     } else {
-      setLinks((prev) => [...prev, { source, target, cost: parseInt(cost, 10) }]);
+      setLinks((prev) => [
+        ...prev,
+        { source, target, cost: parseInt(cost, 10) },
+      ]);
     }
 
     setSource('');
@@ -184,67 +183,65 @@ export default function EIGRPAnimation() {
   };
 
   const handleCSVUpload = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-  Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
-    complete: (results) => {
-      const data = results.data;
-      const newNodes = new Set(nodes.map((n) => n.id));
-      const newLinks = [...links];
-      const errors = [];
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const data = results.data;
+        const newNodes = new Set(nodes.map((n) => n.id));
+        const newLinks = [...links];
+        const errors = [];
 
-      data.forEach((row, index) => {
-        const src = row.source?.trim();
-        const tgt = row.target?.trim();
-        const c = parseInt(row.cost, 10);
+        data.forEach((row, index) => {
+          const src = row.source?.trim();
+          const tgt = row.target?.trim();
+          const c = parseInt(row.cost, 10);
 
-        
-        if (!src || !tgt || isNaN(c)) {
-          errors.push(` Row ${index + 2}: Missing or invalid fields.`);
+          if (!src || !tgt || isNaN(c)) {
+            errors.push(` Row ${index + 2}: Missing or invalid fields.`);
+            return;
+          }
+          if (src === tgt) {
+            errors.push(` Row ${index + 2}: Source and target cannot be same.`);
+            return;
+          }
+          if (c < 0) {
+            errors.push(` Row ${index + 2}: Cost cannot be negative (${c}).`);
+            return;
+          }
+
+          const duplicate = newLinks.find(
+            (l) =>
+              (l.source === src && l.target === tgt) ||
+              (l.source === tgt && l.target === src)
+          );
+          if (duplicate) {
+            errors.push(` Row ${index + 2}: Duplicate link between ${src} and ${tgt}.`);
+            return;
+          }
+
+          newNodes.add(src);
+          newNodes.add(tgt);
+          newLinks.push({ source: src, target: tgt, cost: c });
+        });
+
+        if (errors.length > 0) {
+          alert(
+            `CSV upload failed with errors:\n\n${errors.join('\n')}`
+          );
+          console.warn("Invalid CSV entries:", errors);
           return;
         }
-        if (src === tgt) {
-          errors.push(` Row ${index + 2}: Source and target cannot be the same (${src}).`);
-          return;
-        }
-        if (c < 0) {
-          errors.push(` Row ${index + 2}: Cost cannot be negative (${c}).`);
-          return;
-        }
 
-        
-        const duplicate = newLinks.find(
-          (l) =>
-            (l.source === src && l.target === tgt) ||
-            (l.source === tgt && l.target === src)
-        );
-        if (duplicate) {
-          errors.push(` Row ${index + 2}: Duplicate link between ${src} and ${tgt}.`);
-          return;
-        }
-
-        
-        newNodes.add(src);
-        newNodes.add(tgt);
-        newLinks.push({ source: src, target: tgt, cost: c });
-      });
-
-      if (errors.length > 0) {
-        alert(`CSV upload failed with the following errors:\n\n${errors.join('\n')}`);
-        console.warn("Invalid CSV entries:", errors);
-        return;
-      }
-
-      setNodes([...Array.from(newNodes)].map((id) => ({ id })));
-      setLinks(newLinks);
-      alert(" CSV uploaded successfully!");
-    },
-  });
-};
-
+        setNodes([...Array.from(newNodes)].map((id) => ({ id })));
+        setLinks(newLinks);
+        alert("CSV uploaded successfully!");
+      },
+    });
+  };
 
   const downloadCSV = () => {
     if (!routingTable.length) return;
@@ -257,139 +254,135 @@ export default function EIGRPAnimation() {
   };
 
   const runEIGRP = async () => {
-  const svg = d3.select(svgRef.current);
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const svg = d3.select(svgRef.current);
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
-  if (!localRouter || !nodeMap.has(localRouter)) {
-    alert('Please enter a valid local router ID.');
-    return;
-  }
+    if (!localRouter || !nodeMap.has(localRouter)) {
+      alert('Please enter a valid local router ID.');
+      return;
+    }
 
-  const distTable = {};
-  nodes.forEach((n) => {
-    distTable[n.id] = {};
-    nodes.forEach((m) => {
-      distTable[n.id][m.id] = n.id === m.id ? 0 : Infinity;
+    const distTable = {};
+    nodes.forEach((n) => {
+      distTable[n.id] = {};
+      nodes.forEach((m) => {
+        distTable[n.id][m.id] = n.id === m.id ? 0 : Infinity;
+      });
     });
-  });
 
-  links.forEach((l) => {
-    distTable[l.source.id][l.target.id] = l.cost;
-    distTable[l.target.id][l.source.id] = l.cost;
-  });
+    links.forEach((l) => {
+      distTable[l.source.id][l.target.id] = l.cost;
+      distTable[l.target.id][l.source.id] = l.cost;
+    });
 
-  let updated = true;
-  let iteration = 1;
+    let updated = true;
+    let iteration = 1;
 
-  while (updated) {
-    console.log(`🔄 EIGRP Update Round ${iteration++}`);
-    updated = false;
+    while (updated) {
+      console.log(`🔄 EIGRP Update Round ${iteration++}`);
+      updated = false;
 
-    for (const router of nodes) {
-      const connectedLinks = links.filter(
-        (l) => l.source.id === router.id || l.target.id === router.id
-      );
+      for (const router of nodes) {
+        const connectedLinks = links.filter(
+          (l) => l.source.id === router.id || l.target.id === router.id
+        );
 
-      for (const link of connectedLinks) {
-        const neighborId =
-          link.source.id === router.id ? link.target.id : link.source.id;
+        for (const link of connectedLinks) {
+          const neighborId =
+            link.source.id === router.id ? link.target.id : link.source.id;
 
-        for (const dest of nodes) {
-          if (router.id === dest.id) continue;
+          for (const dest of nodes) {
+            if (router.id === dest.id) continue;
 
-          const newCost =
-            distTable[router.id][neighborId] + distTable[neighborId][dest.id];
+            const newCost =
+              distTable[router.id][neighborId] + distTable[neighborId][dest.id];
 
-          if (newCost < distTable[router.id][dest.id]) {
-            distTable[router.id][dest.id] = newCost;
-            updated = true;
+            if (newCost < distTable[router.id][dest.id]) {
+              distTable[router.id][dest.id] = newCost;
+              updated = true;
 
-            
-            const current = nodeMap.get(router.id);
-            const neighbor = nodeMap.get(neighborId);
+              const current = nodeMap.get(router.id);
+              const neighbor = nodeMap.get(neighborId);
 
-            const packet = svg
-              .append('circle')
-              .attr('r', 7)
-              .attr('fill', 'orange')
-              .attr('cx', current.x)
-              .attr('cy', current.y)
-              .style('opacity', 0.9);
+              const packet = svg
+                .append('circle')
+                .attr('r', 7)
+                .attr('fill', 'orange')
+                .attr('cx', current.x)
+                .attr('cy', current.y)
+                .style('opacity', 0.9);
 
-            
-            const trail = svg
-              .append('line')
-              .attr('x1', current.x)
-              .attr('y1', current.y)
-              .attr('x2', current.x)
-              .attr('y2', current.y)
-              .attr('stroke', 'orange')
-              .attr('stroke-width', 2)
-              .attr('opacity', 0.5);
+              const trail = svg
+                .append('line')
+                .attr('x1', current.x)
+                .attr('y1', current.y)
+                .attr('x2', current.x)
+                .attr('y2', current.y)
+                .attr('stroke', 'orange')
+                .attr('stroke-width', 2)
+                .attr('opacity', 0.5);
 
-            packet
-              .transition()
-              .duration(1500) // 
-              .ease(d3.easeSin)
-              .attr('cx', neighbor.x)
-              .attr('cy', neighbor.y)
-              .on('end', () => {
-                packet.remove();
-                trail
-                  .transition()
-                  .duration(500)
-                  .attr('x2', neighbor.x)
-                  .attr('y2', neighbor.y)
-                  .style('opacity', 0)
-                  .remove();
-              });
+              packet
+                .transition()
+                .duration(1500)
+                .ease(d3.easeSin)
+                .attr('cx', neighbor.x)
+                .attr('cy', neighbor.y)
+                .on('end', () => {
+                  packet.remove();
+                  trail
+                    .transition()
+                    .duration(500)
+                    .attr('x2', neighbor.x)
+                    .attr('y2', neighbor.y)
+                    .style('opacity', 0)
+                    .remove();
+                });
 
-            
-            await new Promise((r) => setTimeout(r, 1200));
+              await new Promise((r) => setTimeout(r, 1200));
+            }
           }
         }
       }
+
+      await new Promise((r) => setTimeout(r, 2000));
     }
 
-   
-    await new Promise((r) => setTimeout(r, 2000));
-  }
+    const tableData = [];
+    nodes.forEach((n) => {
+      if (n.id === localRouter) return;
+      const minCost = distTable[localRouter][n.id];
+      let nextHop = '-';
 
-  
-  const tableData = [];
-  nodes.forEach((n) => {
-    if (n.id === localRouter) return;
-    const minCost = distTable[localRouter][n.id];
-    let nextHop = '-';
-
-    const connectedLinks = links.filter(
-      (l) => l.source.id === localRouter || l.target.id === localRouter
-    );
-    for (const link of connectedLinks) {
-      const neighborId =
-        link.source.id === localRouter ? link.target.id : link.source.id;
-      if (
-        distTable[localRouter][neighborId] + distTable[neighborId][n.id] ===
-        minCost
-      ) {
-        nextHop = neighborId;
-        break;
+      const connectedLinks = links.filter(
+        (l) => l.source.id === localRouter || l.target.id === localRouter
+      );
+      for (const link of connectedLinks) {
+        const neighborId =
+          link.source.id === localRouter ? link.target.id : link.source.id;
+        if (
+          distTable[localRouter][neighborId] + distTable[neighborId][n.id] ===
+          minCost
+        ) {
+          nextHop = neighborId;
+          break;
+        }
       }
-    }
 
-    tableData.push({
-      destination: n.id,
-      cost: minCost === Infinity ? '∞' : minCost,
-      nextHop,
+      tableData.push({
+        destination: n.id,
+        cost: minCost === Infinity ? '∞' : minCost,
+        nextHop,
+      });
     });
-  });
 
-  setRoutingTable(tableData);
-};
+    setRoutingTable(tableData);
+    setDistanceTable(distTable); // ✅ save final distance table
+  };
 
   return (
     <div style={{ maxWidth: '900px', margin: 'auto', fontFamily: 'Inter, sans-serif' }}>
-      <h2 style={{  alignItems: 'center', gap: 8 }}>EIGRP Visualization</h2>
+      <h2>EIGRP Visualization</h2>
 
       <div style={{ marginBottom: 10 }}>
         <label>Local Router ID: </label>
@@ -402,7 +395,7 @@ export default function EIGRPAnimation() {
         />
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 10 , justifyContent: 'center',    alignItems: 'center'}}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10, justifyContent: 'center', alignItems: 'center' }}>
         <input type="text" placeholder="Router A" value={source} onChange={(e) => setSource(e.target.value.trim())} />
         <input type="text" placeholder="Router B" value={target} onChange={(e) => setTarget(e.target.value.trim())} />
         <input type="number" placeholder="Cost" value={cost} onChange={(e) => setCost(e.target.value)} />
@@ -411,7 +404,6 @@ export default function EIGRPAnimation() {
 
       <div style={{ marginBottom: 10 }}>
         <input type="file" accept=".csv" onChange={handleCSVUpload} ref={fileInputRef} />
-
       </div>
 
       <svg
@@ -444,6 +436,36 @@ export default function EIGRPAnimation() {
                   <td style={{ padding: '8px', border: '1px solid #ccc' }}>{row.destination}</td>
                   <td style={{ padding: '8px', border: '1px solid #ccc' }}>{row.cost}</td>
                   <td style={{ padding: '8px', border: '1px solid #ccc' }}>{row.nextHop}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {Object.keys(distanceTable).length > 0 && (
+        <div style={{ marginTop: 40 }}>
+          <h3>Final Distance Table</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', background: '#f1f1f1' }}>
+            <thead style={{ background: '#333', color: 'white' }}>
+              <tr>
+                <th>From / To</th>
+                {nodes.map((n) => (
+                  <th key={n.id}>{n.id}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map((n) => (
+                <tr key={n.id}>
+                  <td style={{ fontWeight: 'bold', border: '1px solid #ccc' }}>{n.id}</td>
+                  {nodes.map((m) => (
+                    <td key={m.id} style={{ border: '1px solid #ccc', padding: '6px' }}>
+                      {distanceTable[n.id]?.[m.id] === Infinity
+                        ? '∞'
+                        : distanceTable[n.id]?.[m.id]}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
