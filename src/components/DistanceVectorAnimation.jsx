@@ -187,12 +187,10 @@ const DistanceVectorAnimation = () => {
       neighbors.forEach((neighborId) => {
         const advertised = {};
 
-        // node advertises its table to neighbor (with split horizon + poisoned reverse)
         Object.keys(nodeTable).forEach((dest) => {
           const entry = nodeTable[dest];
           advertised[dest] = {
-            cost: entry.nextHop === neighborId ? Infinity : entry.cost,
-            poisoned: entry.nextHop === neighborId,
+            cost: entry.cost,
           };
         });
 
@@ -221,17 +219,6 @@ const DistanceVectorAnimation = () => {
               cost: candidateCost,
               nextHop: candidateCost === Infinity ? "-" : nodeId,
               state: candidateCost === Infinity ? "invalid" : "valid",
-            };
-            anyChanged = true;
-            roundChanges[neighborId] = roundChanges[neighborId] || new Set();
-            roundChanges[neighborId].add(dest);
-          }
-
-          if (advertised[dest].poisoned && current.nextHop === nodeId) {
-            neighborTable[dest] = {
-              cost: Infinity,
-              nextHop: "-",
-              state: "invalid",
             };
             anyChanged = true;
             roundChanges[neighborId] = roundChanges[neighborId] || new Set();
